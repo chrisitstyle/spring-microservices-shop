@@ -3,6 +3,7 @@ package pl.chrisitstyle.shop.product;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import pl.chrisitstyle.shop.exception.ProductNotFoundException;
 import pl.chrisitstyle.shop.product.domain.Product;
 
 @Service
@@ -28,7 +29,7 @@ public class ProductService {
 
     public ProductResponse getById(Long id){
         Product product = productRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Product not found " + id));
+                .orElseThrow(() -> new ProductNotFoundException("Product not found " + id));
 
         return toResponse(product);
     }
