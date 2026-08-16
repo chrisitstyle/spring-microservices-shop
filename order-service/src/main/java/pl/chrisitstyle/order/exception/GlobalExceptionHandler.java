@@ -1,4 +1,4 @@
-package pl.chrisitstyle.product.exception;
+package pl.chrisitstyle.order.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -12,16 +12,6 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
-
-    @ExceptionHandler(ProductNotFoundException.class)
-    public ResponseEntity<ErrorDTO> handleProductNotFound(
-            ProductNotFoundException exception
-    ) {
-        return createErrorResponse(
-                exception.getMessage(),
-                HttpStatus.NOT_FOUND
-        );
-    }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorDTO> handleValidation(
@@ -44,9 +34,20 @@ public class GlobalExceptionHandler {
                 fieldErrors
         );
     }
-    @ExceptionHandler(ProductUnavailableException.class)
-    public ResponseEntity<ErrorDTO> handleProductUnavailable(
-            ProductUnavailableException exception
+
+    @ExceptionHandler(ExternalServiceException.class)
+    public ResponseEntity<ErrorDTO> handleExternalService(
+            ExternalServiceException exception
+    ) {
+        return createErrorResponse(
+                exception.getMessage(),
+                HttpStatus.SERVICE_UNAVAILABLE
+        );
+    }
+
+    @ExceptionHandler(OrderCreationException.class)
+    public ResponseEntity<ErrorDTO> handleOrderCreation(
+            OrderCreationException exception
     ) {
         return createErrorResponse(
                 exception.getMessage(),
@@ -54,6 +55,35 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(OrderNotFoundException.class)
+    public ResponseEntity<ErrorDTO> handleOrderNotFound(
+            OrderNotFoundException exception
+    ) {
+        return createErrorResponse(
+                exception.getMessage(),
+                HttpStatus.NOT_FOUND
+        );
+    }
+
+    @ExceptionHandler(InvalidOrderStatusTransitionException.class)
+    public ResponseEntity<ErrorDTO> handleInvalidOrderStatusTransition(
+            InvalidOrderStatusTransitionException exception
+    ) {
+        return createErrorResponse(
+                exception.getMessage(),
+                HttpStatus.CONFLICT
+        );
+    }
+
+    @ExceptionHandler(OrderDeletionException.class)
+    public ResponseEntity<ErrorDTO> handleOrderDeletion(
+            OrderDeletionException exception
+    ) {
+        return createErrorResponse(
+                exception.getMessage(),
+                HttpStatus.CONFLICT
+        );
+    }
 
     private ResponseEntity<ErrorDTO> createErrorResponse(
             String message,
@@ -79,3 +109,4 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorDTO, status);
     }
 }
+
