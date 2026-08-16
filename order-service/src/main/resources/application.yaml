@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: order-service
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/order_db}
+    username: ${DB_USERNAME:order_user}
+    password: ${DB_PASSWORD:order_password}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+  flyway:
+    enabled: true
+
+server:
+  port: 8083
+
+services:
+  user:
+    url: ${USER_SERVICE_URL:http://localhost:8082}
+  product:
+    url: ${PRODUCT_SERVICE_URL:http://localhost:8081}

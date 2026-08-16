@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pl.chrisitstyle.product.domain.Product;
 import pl.chrisitstyle.product.exception.ProductNotFoundException;
+import pl.chrisitstyle.product.exception.ProductUnavailableException;
 
 import java.util.List;
 
@@ -65,6 +66,44 @@ public class ProductService {
 
         product.setActive(false);
 
+    }
+
+    @Transactional
+    public ProductReservationResponse reserve(Long id, StockRequest request) {
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new ProductNotFoundException("Product not found " + id));
+
+        if (!product.getActive()) {
+            throw new ProductUnavailableException(
+                    "Product " + id + " is inactive"
+            );
+        }
+
+        if (product.getStockQuantity() < request.quantity()) {
+            throw new ProductUnavailableException(
+                    "Insufficient stock for product " + id
+            );
+        }
+
+        product.setStockQuantity(
+                product.getStockQuantity() - request.quantity()
+        );
+
+        return new ProductReservationResponse(
+                product.getId(),
+                request.quantity(),
+                product.getPrice()
+        );
+    }
+
+    @Transactional
+    public void release(Long id, StockRequest request) {
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new ProductNotFoundException("Product not found " + id));
+
+        product.setStockQuantity(
+                product.getStockQuantity() + request.quantity()
+        );
     }
 
         private ProductResponse toResponse(Product product) {

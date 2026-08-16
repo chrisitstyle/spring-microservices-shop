@@ -20,6 +20,23 @@ public class ProductController {
         return productService.create(request);
     }
 
+    @PostMapping("/{id}/reserve")
+    public ProductReservationResponse reserve(
+            @PathVariable Long id,
+            @Valid @RequestBody StockRequest request
+    ) {
+        return productService.reserve(id, request);
+    }
+
+    @PostMapping("/{id}/release")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void release(
+            @PathVariable Long id,
+            @Valid @RequestBody StockRequest request
+    ) {
+        productService.release(id, request);
+    }
+
     @GetMapping("/{id}")
     public ProductResponse getById(@PathVariable Long id) {
         return productService.getById(id);
@@ -37,6 +54,8 @@ public class ProductController {
     ) {
         return productService.update(id, request);
     }
+
+
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
