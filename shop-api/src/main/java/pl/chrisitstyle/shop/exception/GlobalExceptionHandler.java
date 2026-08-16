@@ -54,6 +54,29 @@ public class GlobalExceptionHandler {
                 Map.of());
     }
 
+    @ExceptionHandler(UserNotFoundException.class)
+    public ResponseEntity<ErrorDTO> handleUserNotFound(
+            UserNotFoundException exception
+    ) {
+        return createErrorResponse(
+                exception.getMessage(),
+                HttpStatus.NOT_FOUND
+        );
+    }
+
+    @ExceptionHandler(UserAlreadyExistsException.class)
+    public ResponseEntity<ErrorDTO> handleUserAlreadyExists(
+            UserAlreadyExistsException exception
+    ) {
+        return createErrorResponse(
+                exception.getMessage(),
+                HttpStatus.CONFLICT
+        );
+    }
+
+
+
+
     private ResponseEntity<ErrorDTO> createErrorResponse(
             String message,
             HttpStatus status,
