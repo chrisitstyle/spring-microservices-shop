@@ -75,6 +75,45 @@ public class GlobalExceptionHandler {
     }
 
 
+    @ExceptionHandler(OrderCreationException.class)
+    public ResponseEntity<ErrorDTO> handleOrderCreation(
+            OrderCreationException exception
+    ) {
+        return createErrorResponse(
+                exception.getMessage(),
+                HttpStatus.CONFLICT
+        );
+    }
+
+    @ExceptionHandler(OrderNotFoundException.class)
+    public ResponseEntity<ErrorDTO> handleOrderNotFound(
+            OrderNotFoundException exception
+    ) {
+        return createErrorResponse(
+                exception.getMessage(),
+                HttpStatus.NOT_FOUND
+        );
+    }
+
+    @ExceptionHandler(InvalidOrderStatusTransitionException.class)
+    public ResponseEntity<ErrorDTO> handleInvalidOrderStatusTransition(
+            InvalidOrderStatusTransitionException exception
+    ) {
+        return createErrorResponse(
+                exception.getMessage(),
+                HttpStatus.CONFLICT
+        );
+    }
+
+    @ExceptionHandler(OrderDeletionException.class)
+    public ResponseEntity<ErrorDTO> handleOrderDeletion(
+            OrderDeletionException exception
+    ) {
+        return createErrorResponse(
+                exception.getMessage(),
+                HttpStatus.CONFLICT
+        );
+    }
 
 
     private ResponseEntity<ErrorDTO> createErrorResponse(
