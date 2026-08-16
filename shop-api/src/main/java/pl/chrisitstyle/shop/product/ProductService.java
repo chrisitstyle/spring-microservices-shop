@@ -6,6 +6,8 @@ import org.springframework.transaction.annotation.Transactional;
 import pl.chrisitstyle.shop.exception.ProductNotFoundException;
 import pl.chrisitstyle.shop.product.domain.Product;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class ProductService {
@@ -34,8 +36,38 @@ public class ProductService {
         return toResponse(product);
     }
 
+    @Transactional(readOnly = true)
+    public List<ProductResponse> getAll() {
+        return productRepository.findAllByActiveTrue()
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
 
-    private ProductResponse toResponse(Product product) {
+    @Transactional
+    public ProductResponse update(Long id, UpdateProductRequest request) {
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new ProductNotFoundException("Product not found " + id));
+
+        product.setName(request.name());
+        product.setDescription(request.description());
+        product.setPrice(request.price());
+        product.setStockQuantity(request.stockQuantity());
+        product.setActive(request.active());
+
+        return toResponse(product);
+    }
+
+    @Transactional
+    public void delete(Long id) {
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new ProductNotFoundException("Product not found " + id));
+
+        product.setActive(false);
+
+    }
+
+        private ProductResponse toResponse(Product product) {
         return new ProductResponse(
                 product.getId(),
                 product.getName(),
@@ -45,5 +77,4 @@ public class ProductService {
                 product.getActive(),
                 product.getCreatedAt()
         );
-    }
-}
+    }}
