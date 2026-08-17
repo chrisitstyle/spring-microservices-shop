@@ -19,7 +19,7 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final UserClient userClient;
     private final ProductClient productClient;
-    private final OrderEventPublisher orderEventPublisher;
+    private final OutboxService outboxService;
     @Transactional
     public OrderResponse create(CreateOrderRequest request) {
         UserResponse user = userClient.getUser(request.userId());
@@ -78,7 +78,7 @@ public class OrderService {
                     savedOrder.getCreatedAt()
             );
 
-            orderEventPublisher.publishOrderCreated(event);
+            outboxService.saveOrderCreatedEvent(event);
 
             return toResponse(savedOrder);
 
