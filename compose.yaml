@@ -143,6 +143,17 @@ services:
       kafka:
         condition: service_healthy
 
+  notification-service:
+    build:
+      context: ./notification-service
+
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+
+    depends_on:
+      kafka:
+        condition: service_healthy
+
 volumes:
   product-db-data:
   user-db-data:
