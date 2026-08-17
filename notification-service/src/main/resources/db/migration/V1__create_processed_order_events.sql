@@ -1,0 +1,4 @@
+CREATE TABLE processed_order_events (
+order_id BIGINT PRIMARY KEY,
+processed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
