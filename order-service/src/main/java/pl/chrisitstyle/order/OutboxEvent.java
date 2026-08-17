@@ -43,4 +43,14 @@ public class OutboxEvent {
 
     @Column(name = "published_at")
     private OffsetDateTime publishedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private OutboxStatus status = OutboxStatus.PENDING;
+
+    @Column(name = "locked_at")
+    private OffsetDateTime lockedAt;
+
+    @Column(name = "locked_by", length = 100)
+    private String lockedBy;
 }

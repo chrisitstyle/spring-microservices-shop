@@ -4,10 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.time.OffsetDateTime;
-import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 
 @Slf4j
@@ -15,43 +12,52 @@ import java.util.concurrent.ExecutionException;
 @RequiredArgsConstructor
 public class OutboxPublishingService {
 
-    private final OutboxEventRepository outboxEventRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
+    private final OutboxStateService outboxStateService;
 
-    @Transactional
-    public void publish(UUID eventId) {
-        OutboxEvent event = outboxEventRepository.findById(eventId)
-                .orElseThrow();
-
-        if (event.getPublishedAt() != null) {
-            return;
-        }
-
+    public void publish(OutboxClaim event, String workerId) {
         try {
             kafkaTemplate.send(
-                    event.getTopic(),
-                    event.getEventKey(),
-                    event.getPayload()
+                    event.topic(),
+                    event.eventKey(),
+                    event.payload()
             ).get();
 
-            event.setPublishedAt(OffsetDateTime.now());
+            boolean markedAsPublished =
+                    outboxStateService.markPublished(event.id(), workerId);
 
-            log.info(
-                    "Outbox event published: eventId={}, eventType={}, aggregateId={}",
-                    event.getId(),
-                    event.getEventType(),
-                    event.getAggregateId()
-            );
+            if (markedAsPublished) {
+                log.info(
+                        "Outbox event published: eventId={}, eventType={}, aggregateId={}, workerId={}",
+                        event.id(),
+                        event.eventType(),
+                        event.aggregateId(),
+                        workerId
+                );
+            } else {
+                log.warn(
+                        "Outbox event was published but could not be marked as published: eventId={}",
+                        event.id()
+                );
+            }
+
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
 
-            throw new IllegalStateException(
-                    "Interrupted while publishing outbox event " + eventId,
-                    exception
+            outboxStateService.release(event.id(), workerId);
+
+            log.warn(
+                    "Outbox publishing interrupted: eventId={}",
+                    event.id()
             );
+
         } catch (ExecutionException exception) {
-            throw new IllegalStateException(
-                    "Could not publish outbox event " + eventId,
+            outboxStateService.release(event.id(), workerId);
+
+            log.warn(
+                    "Could not publish outbox event: eventId={}, aggregateId={}",
+                    event.id(),
+                    event.aggregateId(),
                     exception
             );
         }

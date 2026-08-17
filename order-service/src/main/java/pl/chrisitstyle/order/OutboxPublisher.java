@@ -1,24 +1,31 @@
 package pl.chrisitstyle.order;
 
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-@Slf4j
+import java.util.List;
+import java.util.UUID;
+
 @Component
 @RequiredArgsConstructor
 public class OutboxPublisher {
 
-    private final OutboxEventRepository outboxEventRepository;
+    private static final int BATCH_SIZE = 100;
+
+    private final OutboxClaimService outboxClaimService;
     private final OutboxPublishingService outboxPublishingService;
+
+    private final String workerId = UUID.randomUUID().toString();
 
     @Scheduled(fixedDelayString = "${outbox.publisher.fixed-delay:2000}")
     public void publishPendingEvents() {
-        outboxEventRepository
-                .findTop100ByPublishedAtIsNullOrderByCreatedAtAsc()
-                .forEach(event ->
-                        outboxPublishingService.publish(event.getId())
-                );
+
+        List<OutboxClaim> events =
+                outboxClaimService.claimBatch(workerId, BATCH_SIZE);
+
+        events.forEach(event ->
+                outboxPublishingService.publish(event, workerId)
+        );
     }
 }
