@@ -15,11 +15,19 @@ spring:
   flyway:
     enabled: true
 
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
+
 server:
   port: 8083
 
 services:
   user:
     url: ${USER_SERVICE_URL:http://localhost:8082}
+
   product:
     url: ${PRODUCT_SERVICE_URL:http://localhost:8081}

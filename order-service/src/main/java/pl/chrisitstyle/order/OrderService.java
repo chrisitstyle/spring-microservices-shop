@@ -19,7 +19,7 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final UserClient userClient;
     private final ProductClient productClient;
-
+    private final OrderEventPublisher orderEventPublisher;
     @Transactional
     public OrderResponse create(CreateOrderRequest request) {
         UserResponse user = userClient.getUser(request.userId());
@@ -70,6 +70,15 @@ public class OrderService {
             order.setTotalAmount(totalAmount);
 
             Order savedOrder = orderRepository.save(order);
+
+            OrderCreatedEvent event = new OrderCreatedEvent(
+                    savedOrder.getId(),
+                    savedOrder.getUserId(),
+                    savedOrder.getTotalAmount(),
+                    savedOrder.getCreatedAt()
+            );
+
+            orderEventPublisher.publishOrderCreated(event);
 
             return toResponse(savedOrder);
 
