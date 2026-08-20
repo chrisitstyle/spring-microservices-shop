@@ -11,6 +11,8 @@ import java.util.UUID;
 
 public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> {
 
+    long countByStatus(OutboxStatus status);
+
     @Query(
             value = """
                     SELECT *
@@ -75,4 +77,5 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
             nativeQuery = true
     )
     int releaseStaleEvents();
+
 }

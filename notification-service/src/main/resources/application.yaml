@@ -30,3 +30,18 @@ spring:
 
       properties:
         spring.json.add.type.headers: false
+
+
+server:
+  port: 8084
+
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+
+  endpoint:
+    health:
+      show-details: always

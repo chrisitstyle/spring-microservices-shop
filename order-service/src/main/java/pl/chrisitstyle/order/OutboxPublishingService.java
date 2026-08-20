@@ -2,6 +2,7 @@ package pl.chrisitstyle.order;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.common.KafkaException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
@@ -23,8 +24,7 @@ public class OutboxPublishingService {
                     event.payload()
             ).get();
 
-            boolean markedAsPublished =
-                    outboxStateService.markPublished(event.id(), workerId);
+            boolean markedAsPublished = outboxStateService.markPublished(event.id(), workerId);
 
             if (markedAsPublished) {
                 log.info(
@@ -33,11 +33,6 @@ public class OutboxPublishingService {
                         event.eventType(),
                         event.aggregateId(),
                         workerId
-                );
-            } else {
-                log.warn(
-                        "Outbox event was published but could not be marked as published: eventId={}",
-                        event.id()
                 );
             }
 
@@ -56,6 +51,16 @@ public class OutboxPublishingService {
 
             log.warn(
                     "Could not publish outbox event: eventId={}, aggregateId={}",
+                    event.id(),
+                    event.aggregateId(),
+                    exception
+            );
+
+        } catch (KafkaException exception) {
+            outboxStateService.release(event.id(), workerId);
+
+            log.warn(
+                    "Kafka unavailable while publishing outbox event: eventId={}, aggregateId={}",
                     event.id(),
                     event.aggregateId(),
                     exception

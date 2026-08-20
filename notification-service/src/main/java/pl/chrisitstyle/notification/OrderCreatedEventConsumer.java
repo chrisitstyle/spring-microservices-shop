@@ -18,6 +18,7 @@ import pl.chrisitstyle.notification.exception.NotificationProviderUnavailableExc
 public class OrderCreatedEventConsumer {
 
     private final ProcessedEventRepository processedEventRepository;
+    private final NotificationMetrics notificationMetrics;
 
     @Transactional
     @RetryableTopic(
@@ -44,6 +45,7 @@ public class OrderCreatedEventConsumer {
                 processedEventRepository.tryRegister(event.orderId());
 
         if (!firstProcessing) {
+            notificationMetrics.incrementDuplicates();
             log.warn(
                     "Duplicate order created event ignored: orderId={}",
                     event.orderId()
@@ -67,10 +69,13 @@ public class OrderCreatedEventConsumer {
                 "Order created notification sent: orderId={}",
                 event.orderId()
         );
+
+        notificationMetrics.incrementProcessed();
     }
 
     @DltHandler
     public void handleDlt(OrderCreatedEvent event) {
+        notificationMetrics.incrementDlt();
         log.error(
                 "Order created event sent to DLT: orderId={}",
                 event.orderId()
