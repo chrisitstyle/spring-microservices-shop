@@ -1,5 +1,6 @@
 package pl.chrisitstyle.order.exception;
 
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -41,6 +42,16 @@ public class GlobalExceptionHandler {
     ) {
         return createErrorResponse(
                 exception.getMessage(),
+                HttpStatus.SERVICE_UNAVAILABLE
+        );
+    }
+
+    @ExceptionHandler(CallNotPermittedException.class)
+    public ResponseEntity<ErrorDTO> handleCircuitBreakerOpen(
+            CallNotPermittedException exception
+    ) {
+        return createErrorResponse(
+                "Product service temporarily unavailable",
                 HttpStatus.SERVICE_UNAVAILABLE
         );
     }

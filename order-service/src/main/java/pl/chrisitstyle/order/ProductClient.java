@@ -1,5 +1,6 @@
 package pl.chrisitstyle.order;
 
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -24,6 +25,7 @@ public class ProductClient {
                 .build();
     }
 
+    @CircuitBreaker(name = "productService")
     public ProductReservationResponse reserve(
             Long productId,
             Integer quantity

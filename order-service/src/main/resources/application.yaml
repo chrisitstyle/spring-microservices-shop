@@ -2,6 +2,11 @@ spring:
   application:
     name: order-service
 
+  http:
+    clients:
+      connect-timeout: 2s
+      read-timeout: 2s
+
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/order_db}
     username: ${DB_USERNAME:order_user}
@@ -39,8 +44,42 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,prometheus,metrics
+        include: health,info,prometheus,metrics,circuitbreakers,circuitbreakerevents,retries,retryevents
 
   endpoint:
     health:
       show-details: always
+
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      productService:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 5
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 2
+        automatic-transition-from-open-to-half-open-enabled: true
+        event-consumer-buffer-size: 20
+
+        record-exceptions:
+          - pl.chrisitstyle.order.exception.ExternalServiceException
+
+        ignore-exceptions:
+          - pl.chrisitstyle.order.exception.OrderCreationException
+
+
+  retry:
+    instances:
+      userService:
+        max-attempts: 3
+        wait-duration: 300ms
+        event-consumer-buffer-size: 20
+
+        retry-exceptions:
+          - pl.chrisitstyle.order.exception.ExternalServiceException
+
+        ignore-exceptions:
+          - pl.chrisitstyle.order.exception.OrderCreationException
