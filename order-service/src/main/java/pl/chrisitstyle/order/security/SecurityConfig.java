@@ -42,7 +42,7 @@ public class SecurityConfig {
 
                                 .requestMatchers(HttpMethod.GET, "/orders/me")
                                 .hasRole("CUSTOMER")
-                                
+
                                 // Customers and administrators can read a single order.
                                 .requestMatchers(HttpMethod.GET, "/orders/*")
                                 .hasAnyRole("CUSTOMER", "ADMIN")

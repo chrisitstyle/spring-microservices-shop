@@ -8,6 +8,20 @@ spring:
         jwt:
           issuer-uri: ${JWT_ISSUER_URI:http://localhost:8080/realms/spring-shop}
           jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8080/realms/spring-shop/protocol/openid-connect/certs}
+
+      client:
+        registration:
+          order-service-client:
+            provider: keycloak
+            client-id: order-service-client
+            client-secret: ${ORDER_SERVICE_CLIENT_SECRET}
+            authorization-grant-type: client_credentials
+            client-authentication-method: client_secret_post
+
+        provider:
+          keycloak:
+            token-uri: ${KEYCLOAK_TOKEN_URI:http://localhost:8080/realms/spring-shop/protocol/openid-connect/token}
+
   http:
     clients:
       connect-timeout: 2s
@@ -76,7 +90,6 @@ resilience4j:
         ignore-exceptions:
           - pl.chrisitstyle.order.exception.OrderCreationException
 
-
   retry:
     instances:
       userService:
@@ -90,7 +103,6 @@ resilience4j:
         ignore-exceptions:
           - pl.chrisitstyle.order.exception.OrderCreationException
 
-
       productService:
         max-attempts: 3
         wait-duration: 300ms
@@ -101,7 +113,6 @@ resilience4j:
 
         ignore-exceptions:
           - pl.chrisitstyle.order.exception.OrderCreationException
-
 
       productServiceRelease:
         max-attempts: 3

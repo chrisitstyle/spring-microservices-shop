@@ -133,6 +133,10 @@ services:
       KC_DB_USERNAME: keycloak_user
       KC_DB_PASSWORD: keycloak_password
 
+      KC_HOSTNAME: http://localhost:8080
+
+      ORDER_SERVICE_CLIENT_SECRET: ${ORDER_SERVICE_CLIENT_SECRET}
+
     volumes:
       - ./keycloak/import:/opt/keycloak/data/import:ro
 
@@ -145,26 +149,42 @@ services:
       context: ./product-service
     ports:
       - "8081:8081"
+
     environment:
       DB_URL: jdbc:postgresql://product-db:5432/product_db
       DB_USERNAME: product_user
       DB_PASSWORD: product_password
+
+      JWT_ISSUER_URI: http://localhost:8080/realms/spring-shop
+      JWT_JWK_SET_URI: http://keycloak:8080/realms/spring-shop/protocol/openid-connect/certs
+
     depends_on:
       product-db:
         condition: service_healthy
+
+      keycloak:
+        condition: service_started
 
   user-service:
     build:
       context: ./user-service
     ports:
       - "8082:8082"
+
     environment:
       DB_URL: jdbc:postgresql://user-db:5432/user_db
       DB_USERNAME: user_user
       DB_PASSWORD: user_password
+
+      JWT_ISSUER_URI: http://localhost:8080/realms/spring-shop
+      JWT_JWK_SET_URI: http://keycloak:8080/realms/spring-shop/protocol/openid-connect/certs
+
     depends_on:
       user-db:
         condition: service_healthy
+
+      keycloak:
+        condition: service_started
 
   order-service:
     build:
@@ -184,6 +204,9 @@ services:
 
       JWT_ISSUER_URI: http://localhost:8080/realms/spring-shop
       JWT_JWK_SET_URI: http://keycloak:8080/realms/spring-shop/protocol/openid-connect/certs
+
+      ORDER_SERVICE_CLIENT_SECRET: ${ORDER_SERVICE_CLIENT_SECRET}
+      KEYCLOAK_TOKEN_URI: http://keycloak:8080/realms/spring-shop/protocol/openid-connect/token
 
     depends_on:
       order-db:

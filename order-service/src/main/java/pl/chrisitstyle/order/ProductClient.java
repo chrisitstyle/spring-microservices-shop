@@ -4,6 +4,7 @@ import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.oauth2.client.web.client.OAuth2ClientHttpRequestInterceptor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
@@ -14,17 +15,28 @@ import pl.chrisitstyle.order.exception.OrderCreationException;
 
 import java.util.UUID;
 
+import static org.springframework.security.oauth2.client.web.client.RequestAttributeClientRegistrationIdResolver.clientRegistrationId;
+import static org.springframework.security.oauth2.client.web.client.RequestAttributePrincipalResolver.principal;
+
 @Component
 public class ProductClient {
+
+    private static final String CLIENT_REGISTRATION_ID =
+            "order-service-client";
+
+    private static final String PRINCIPAL_NAME =
+            "order-service";
 
     private final RestClient restClient;
 
     public ProductClient(
             RestClient.Builder builder,
+            OAuth2ClientHttpRequestInterceptor oauth2ClientHttpRequestInterceptor,
             @Value("${services.product.url}") String productServiceUrl
     ) {
         this.restClient = builder
                 .baseUrl(productServiceUrl)
+                .requestInterceptor(oauth2ClientHttpRequestInterceptor)
                 .build();
     }
 
@@ -41,6 +53,14 @@ public class ProductClient {
                     .header(
                             "Idempotency-Key",
                             idempotencyKey.toString()
+                    )
+                    .attributes(
+                            clientRegistrationId(
+                                    CLIENT_REGISTRATION_ID
+                            )
+                    )
+                    .attributes(
+                            principal(PRINCIPAL_NAME)
                     )
                     .body(new StockRequest(quantity))
                     .retrieve()
@@ -92,6 +112,14 @@ public class ProductClient {
                     .header(
                             "Idempotency-Key",
                             reservationKey.toString()
+                    )
+                    .attributes(
+                            clientRegistrationId(
+                                    CLIENT_REGISTRATION_ID
+                            )
+                    )
+                    .attributes(
+                            principal(PRINCIPAL_NAME)
                     )
                     .body(new StockRequest(quantity))
                     .retrieve()
