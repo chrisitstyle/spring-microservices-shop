@@ -120,7 +120,7 @@ services:
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.7.1
-    command: start-dev
+    command: start-dev --import-realm
     ports:
       - "8080:8080"
 
@@ -132,6 +132,9 @@ services:
       KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
       KC_DB_USERNAME: keycloak_user
       KC_DB_PASSWORD: keycloak_password
+
+    volumes:
+      - ./keycloak/import:/opt/keycloak/data/import:ro
 
     depends_on:
       keycloak-db:
