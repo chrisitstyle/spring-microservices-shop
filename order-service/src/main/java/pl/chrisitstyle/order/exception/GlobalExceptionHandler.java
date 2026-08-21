@@ -96,6 +96,16 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(OrderAccessDeniedException.class)
+    public ResponseEntity<ErrorDTO> handleOrderAccessDenied(
+            OrderAccessDeniedException exception
+    ) {
+        return createErrorResponse(
+                exception.getMessage(),
+                HttpStatus.FORBIDDEN
+        );
+    }
+
     private ResponseEntity<ErrorDTO> createErrorResponse(
             String message,
             HttpStatus status) {

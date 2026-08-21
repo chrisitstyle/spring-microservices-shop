@@ -3,10 +3,7 @@ package pl.chrisitstyle.order;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import pl.chrisitstyle.order.exception.InvalidOrderStatusTransitionException;
-import pl.chrisitstyle.order.exception.OrderCreationException;
-import pl.chrisitstyle.order.exception.OrderDeletionException;
-import pl.chrisitstyle.order.exception.OrderNotFoundException;
+import pl.chrisitstyle.order.exception.*;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -23,8 +20,11 @@ public class OrderService {
     private final OutboxService outboxService;
 
     @Transactional
-    public OrderResponse create(CreateOrderRequest request) {
-        UserResponse user = userClient.getUser(request.userId());
+    public OrderResponse create(
+            String keycloakSubject,
+            CreateOrderRequest request
+    ) {
+        UserResponse user = userClient.getUserByKeycloakSubject(keycloakSubject);
 
         if (!user.active()) {
             throw new OrderCreationException(
@@ -103,8 +103,22 @@ public class OrderService {
     }
 
     @Transactional(readOnly = true)
-    public OrderResponse getById(Long id) {
+    public OrderResponse getById(
+            Long id,
+            String keycloakSubject,
+            boolean admin
+    ) {
         Order order = findById(id);
+
+        if (admin) {
+            return toResponse(order);
+        }
+
+        UserResponse user = userClient.getUserByKeycloakSubject(keycloakSubject);
+
+        if (!order.getUserId().equals(user.id())) {
+            throw new OrderAccessDeniedException(id);
+        }
 
         return toResponse(order);
     }
@@ -112,6 +126,17 @@ public class OrderService {
     @Transactional(readOnly = true)
     public List<OrderResponse> getAll() {
         return orderRepository.findAll()
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<OrderResponse> getMyOrders(String keycloakSubject) {
+        UserResponse user =
+                userClient.getUserByKeycloakSubject(keycloakSubject);
+
+        return orderRepository.findAllByUserId(user.id())
                 .stream()
                 .map(this::toResponse)
                 .toList();

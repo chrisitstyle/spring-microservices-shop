@@ -28,6 +28,9 @@ public class User {
     @Column(nullable = false)
     private Boolean active;
 
+    @Column(name = "keycloak_subject", length = 255)
+    private String keycloakSubject;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;

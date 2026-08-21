@@ -96,6 +96,17 @@ public class UserService {
                 .orElseThrow(() -> new UserNotFoundException(id));
     }
 
+    @Transactional(readOnly = true)
+    public UserResponse getByKeycloakSubject(String keycloakSubject) {
+        User user = userRepository
+                .findByKeycloakSubject(keycloakSubject)
+                .orElseThrow(() ->
+                        new UserNotFoundException(keycloakSubject)
+                );
+
+        return toResponse(user);
+    }
+
     private UserResponse toResponse(User user) {
         return new UserResponse(
                 user.getId(),

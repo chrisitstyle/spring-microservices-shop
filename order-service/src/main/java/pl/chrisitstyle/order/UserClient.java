@@ -60,4 +60,44 @@ public class UserClient {
             );
         }
     }
+
+    @Retry(name = "userService")
+    public UserResponse getUserByKeycloakSubject(String keycloakSubject) {
+        try {
+            return restClient.get()
+                    .uri(uriBuilder ->
+                            uriBuilder
+                                    .path("/users/by-keycloak-subject")
+                                    .queryParam("subject", keycloakSubject)
+                                    .build()
+                    )
+                    .retrieve()
+                    .body(UserResponse.class);
+
+        } catch (RestClientResponseException exception) {
+            if (exception.getStatusCode() == HttpStatus.NOT_FOUND) {
+                throw new OrderCreationException(
+                        "Authenticated user is not linked to a shop user"
+                );
+            }
+
+            throw new ExternalServiceException(
+                    "User service returned error: "
+                            + exception.getStatusCode(),
+                    exception
+            );
+
+        } catch (ResourceAccessException exception) {
+            throw new ExternalServiceException(
+                    "User service unavailable",
+                    exception
+            );
+
+        } catch (RestClientException exception) {
+            throw new ExternalServiceException(
+                    "User service communication failed",
+                    exception
+            );
+        }
+    }
 }

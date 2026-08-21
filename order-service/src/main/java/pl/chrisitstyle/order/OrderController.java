@@ -3,6 +3,9 @@ package pl.chrisitstyle.order;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -17,9 +20,13 @@ public class OrderController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public OrderResponse create(
+            @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody CreateOrderRequest request
     ) {
-        return orderService.create(request);
+        return orderService.create(
+                jwt.getSubject(),
+                request
+        );
     }
 
     @GetMapping
@@ -29,9 +36,30 @@ public class OrderController {
 
     @GetMapping("/{id}")
     public OrderResponse getById(
-            @PathVariable Long id
+            @PathVariable Long id,
+            @AuthenticationPrincipal Jwt jwt,
+            Authentication authentication
     ) {
-        return orderService.getById(id);
+        boolean admin = authentication.getAuthorities()
+                .stream()
+                .anyMatch(authority ->
+                        authority.getAuthority().equals("ROLE_ADMIN")
+                );
+
+        return orderService.getById(
+                id,
+                jwt.getSubject(),
+                admin
+        );
+    }
+
+    @GetMapping("/me")
+    public List<OrderResponse> getMyOrders(
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return orderService.getMyOrders(
+                jwt.getSubject()
+        );
     }
 
     @PatchMapping("/{id}/status")

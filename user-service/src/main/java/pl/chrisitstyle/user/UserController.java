@@ -32,6 +32,13 @@ public class UserController {
         return userService.getById(id);
     }
 
+    @GetMapping("/by-keycloak-subject")
+    public UserResponse getByKeycloakSubject(
+            @RequestParam String subject
+    ) {
+        return userService.getByKeycloakSubject(subject);
+    }
+
     @PutMapping("/{id}")
     public UserResponse update(
             @PathVariable Long id,
