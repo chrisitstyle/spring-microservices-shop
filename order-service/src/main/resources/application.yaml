@@ -83,3 +83,27 @@ resilience4j:
 
         ignore-exceptions:
           - pl.chrisitstyle.order.exception.OrderCreationException
+
+
+      productService:
+        max-attempts: 3
+        wait-duration: 300ms
+        event-consumer-buffer-size: 20
+
+        retry-exceptions:
+          - pl.chrisitstyle.order.exception.ExternalServiceException
+
+        ignore-exceptions:
+          - pl.chrisitstyle.order.exception.OrderCreationException
+
+
+      productServiceRelease:
+        max-attempts: 3
+        wait-duration: 300ms
+        event-consumer-buffer-size: 20
+
+        retry-exceptions:
+          - pl.chrisitstyle.order.exception.ExternalServiceException
+
+        ignore-exceptions:
+          - pl.chrisitstyle.order.exception.OrderCreationException

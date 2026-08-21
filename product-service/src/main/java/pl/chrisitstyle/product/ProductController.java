@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/products")
@@ -23,18 +24,27 @@ public class ProductController {
     @PostMapping("/{id}/reserve")
     public ProductReservationResponse reserve(
             @PathVariable Long id,
+            @RequestHeader("Idempotency-Key") UUID idempotencyKey,
             @Valid @RequestBody StockRequest request
     ) {
-        return productService.reserve(id, request);
+        return productService.reserve(
+                id,
+                request,
+                idempotencyKey);
     }
 
     @PostMapping("/{id}/release")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void release(
             @PathVariable Long id,
+            @RequestHeader("Idempotency-Key") UUID idempotencyKey,
             @Valid @RequestBody StockRequest request
     ) {
-        productService.release(id, request);
+        productService.release(
+                id,
+                request,
+                idempotencyKey
+        );
     }
 
     @GetMapping("/{id}")

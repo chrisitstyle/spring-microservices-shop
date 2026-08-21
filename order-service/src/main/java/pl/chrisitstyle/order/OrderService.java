@@ -11,6 +11,7 @@ import pl.chrisitstyle.order.exception.OrderNotFoundException;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -20,6 +21,7 @@ public class OrderService {
     private final UserClient userClient;
     private final ProductClient productClient;
     private final OutboxService outboxService;
+
     @Transactional
     public OrderResponse create(CreateOrderRequest request) {
         UserResponse user = userClient.getUser(request.userId());
@@ -39,16 +41,27 @@ public class OrderService {
 
         try {
             for (CreateOrderItemRequest itemRequest : request.items()) {
+                /*
+                 * The idempotency key is generated before calling ProductClient.
+                 *
+                 * ProductClient.reserve() may be retried by Resilience4j.
+                 * Every retry must use exactly the same key so that
+                 * product-service recognizes it as the same logical operation.
+                 */
+                UUID idempotencyKey = UUID.randomUUID();
+
                 ProductReservationResponse reservation =
                         productClient.reserve(
                                 itemRequest.productId(),
-                                itemRequest.quantity()
+                                itemRequest.quantity(),
+                                idempotencyKey
                         );
 
                 reservations.add(
                         new StockReservation(
                                 reservation.productId(),
-                                reservation.quantity()
+                                reservation.quantity(),
+                                idempotencyKey
                         )
                 );
 
@@ -56,6 +69,7 @@ public class OrderService {
                 orderItem.setProductId(reservation.productId());
                 orderItem.setQuantity(reservation.quantity());
                 orderItem.setUnitPrice(reservation.unitPrice());
+                orderItem.setReservationKey(idempotencyKey);
 
                 order.addItem(orderItem);
 
@@ -183,7 +197,8 @@ public class OrderService {
                 .forEach(item ->
                         productClient.release(
                                 item.getProductId(),
-                                item.getQuantity()
+                                item.getQuantity(),
+                                item.getReservationKey()
                         )
                 );
     }
@@ -206,7 +221,8 @@ public class OrderService {
 
             productClient.release(
                     reservation.productId(),
-                    reservation.quantity()
+                    reservation.quantity(),
+                    reservation.reservationKey()
             );
         }
     }
@@ -236,7 +252,8 @@ public class OrderService {
 
     private record StockReservation(
             Long productId,
-            Integer quantity
+            Integer quantity,
+            UUID reservationKey
     ) {
     }
 }

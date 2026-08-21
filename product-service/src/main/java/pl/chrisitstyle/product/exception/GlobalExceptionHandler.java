@@ -55,6 +55,16 @@ public class GlobalExceptionHandler {
     }
 
 
+    @ExceptionHandler(IdempotencyConflictException.class)
+    public ResponseEntity<ErrorDTO> handleIdempotencyConflict(
+            IdempotencyConflictException exception
+    ) {
+        return createErrorResponse(
+                exception.getMessage(),
+                HttpStatus.CONFLICT
+        );
+    }
+
     private ResponseEntity<ErrorDTO> createErrorResponse(
             String message,
             HttpStatus status) {
@@ -78,4 +88,6 @@ public class GlobalExceptionHandler {
 
         return new ResponseEntity<>(errorDTO, status);
     }
+
+
 }
