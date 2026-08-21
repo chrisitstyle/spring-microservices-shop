@@ -2,6 +2,12 @@ spring:
   application:
     name: order-service
 
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:http://localhost:8080/realms/spring-shop}
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8080/realms/spring-shop/protocol/openid-connect/certs}
   http:
     clients:
       connect-timeout: 2s
