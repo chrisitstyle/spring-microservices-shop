@@ -3,7 +3,6 @@ package pl.chrisitstyle.user.security;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
@@ -47,8 +46,41 @@ public class SecurityConfig {
                                 )
                                 .hasRole("INTERNAL_SERVICE")
 
+                                .requestMatchers(
+                                        HttpMethod.GET,
+                                        "/users"
+                                )
+                                .hasRole("ADMIN")
+
+                                .requestMatchers(
+                                        HttpMethod.GET,
+                                        "/users/*"
+                                )
+                                .hasAnyRole(
+                                        "ADMIN",
+                                        "INTERNAL_SERVICE"
+                                )
+
+                                .requestMatchers(
+                                        HttpMethod.POST,
+                                        "/users"
+                                )
+                                .hasRole("ADMIN")
+
+                                .requestMatchers(
+                                        HttpMethod.PUT,
+                                        "/users/*"
+                                )
+                                .hasRole("ADMIN")
+
+                                .requestMatchers(
+                                        HttpMethod.DELETE,
+                                        "/users/*"
+                                )
+                                .hasRole("ADMIN")
+
                                 .anyRequest()
-                                .permitAll()
+                                .denyAll()
                 )
                 .oauth2ResourceServer(oauth2 ->
                         oauth2.jwt(jwt ->

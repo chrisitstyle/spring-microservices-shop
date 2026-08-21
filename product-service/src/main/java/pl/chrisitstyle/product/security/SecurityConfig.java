@@ -51,8 +51,38 @@ public class SecurityConfig {
                                 )
                                 .hasRole("INTERNAL_SERVICE")
 
-                                .anyRequest()
+                                .requestMatchers(
+                                        HttpMethod.POST,
+                                        "/products"
+                                )
+                                .hasRole("ADMIN")
+
+                                .requestMatchers(
+                                        HttpMethod.PUT,
+                                        "/products/*"
+                                )
+                                .hasRole("ADMIN")
+
+                                .requestMatchers(
+                                        HttpMethod.DELETE,
+                                        "/products/*"
+                                )
+                                .hasRole("ADMIN")
+
+                                .requestMatchers(
+                                        HttpMethod.GET,
+                                        "/products"
+                                )
                                 .permitAll()
+
+                                .requestMatchers(
+                                        HttpMethod.GET,
+                                        "/products/*"
+                                )
+                                .permitAll()
+
+                                .anyRequest()
+                                .denyAll()
                 )
                 .oauth2ResourceServer(oauth2 ->
                         oauth2.jwt(jwt ->
