@@ -58,3 +58,8 @@ management:
     metrics:
       export:
         enabled: false
+
+logging:
+  structured:
+    format:
+      console: ecs

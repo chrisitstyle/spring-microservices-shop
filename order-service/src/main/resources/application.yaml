@@ -144,3 +144,8 @@ resilience4j:
 
         ignore-exceptions:
           - pl.chrisitstyle.order.exception.OrderCreationException
+
+logging:
+  structured:
+    format:
+      console: ecs
