@@ -14,10 +14,29 @@ spring:
       server:
         webmvc:
           routes:
-            - id: product-service
+            - id: product-read
               uri: ${PRODUCT_SERVICE_URL:http://localhost:8081}
               predicates:
                 - Path=/products,/products/**
+                - Method=GET
+
+            - id: product-create
+              uri: ${PRODUCT_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/products
+                - Method=POST
+
+            - id: product-update
+              uri: ${PRODUCT_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/products/*
+                - Method=PUT
+
+            - id: product-delete
+              uri: ${PRODUCT_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/products/*
+                - Method=DELETE
 
             - id: order-service
               uri: ${ORDER_SERVICE_URL:http://localhost:8083}
