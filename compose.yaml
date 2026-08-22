@@ -156,11 +156,16 @@ services:
       JWT_ISSUER_URI: http://localhost:8080/realms/spring-shop
       JWT_JWK_SET_URI: http://keycloak:8080/realms/spring-shop/protocol/openid-connect/certs
 
+      OTEL_TRACES_ENDPOINT: http://tempo:4318/v1/traces
+
     depends_on:
       product-db:
         condition: service_healthy
 
       keycloak:
+        condition: service_started
+
+      tempo:
         condition: service_started
 
   user-service:
@@ -233,11 +238,16 @@ services:
       JWT_ISSUER_URI: http://localhost:8080/realms/spring-shop
       JWT_JWK_SET_URI: http://keycloak:8080/realms/spring-shop/protocol/openid-connect/certs
 
+      OTEL_TRACES_ENDPOINT: http://tempo:4318/v1/traces
+
     depends_on:
       product-service:
         condition: service_started
 
       order-service:
+        condition: service_started
+
+      tempo:
         condition: service_started
 
   notification-service:
@@ -301,6 +311,18 @@ services:
 
     depends_on:
       - prometheus
+      - tempo
+
+  tempo:
+    image: grafana/tempo:3.0.2
+
+    command:
+      - "-target=all"
+      - "-config.file=/etc/tempo.yaml"
+
+    volumes:
+      - ./monitoring/tempo/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
 
 volumes:
   product-db-data:
@@ -310,3 +332,4 @@ volumes:
   keycloak-db-data:
   prometheus-data:
   grafana-data:
+  tempo-data:

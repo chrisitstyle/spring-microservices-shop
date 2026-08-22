@@ -66,3 +66,18 @@ management:
       percentiles-histogram:
         http.server.requests: true
         http.client.requests: true
+
+
+  tracing:
+    sampling:
+      probability: 1.0
+
+  opentelemetry:
+    resource-attributes:
+      service.name: ${spring.application.name}
+
+    tracing:
+      export:
+        otlp:
+          endpoint: ${OTEL_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+          transport: http

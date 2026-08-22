@@ -36,3 +36,22 @@ management:
   endpoint:
     health:
       show-details: always
+
+  tracing:
+    sampling:
+      probability: 1.0
+
+  opentelemetry:
+    resource-attributes:
+      service.name: ${spring.application.name}
+
+    tracing:
+      export:
+        otlp:
+          endpoint: ${OTEL_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+          transport: http
+
+  otlp:
+    metrics:
+      export:
+        enabled: false
