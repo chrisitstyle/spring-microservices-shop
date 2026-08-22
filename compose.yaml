@@ -147,8 +147,6 @@ services:
   product-service:
     build:
       context: ./product-service
-    ports:
-      - "8081:8081"
 
     environment:
       DB_URL: jdbc:postgresql://product-db:5432/product_db
@@ -168,8 +166,6 @@ services:
   user-service:
     build:
       context: ./user-service
-    ports:
-      - "8082:8082"
 
     environment:
       DB_URL: jdbc:postgresql://user-db:5432/user_db
@@ -189,8 +185,6 @@ services:
   order-service:
     build:
       context: ./order-service
-    ports:
-      - "8083:8083"
 
     environment:
       DB_URL: jdbc:postgresql://order-db:5432/order_db
@@ -249,9 +243,6 @@ services:
   notification-service:
     build:
       context: ./notification-service
-
-    ports:
-      - "8084:8084"
 
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
