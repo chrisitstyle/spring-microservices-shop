@@ -45,7 +45,9 @@ public class OutboxClaimService {
                         event.getAggregateId(),
                         event.getTopic(),
                         event.getEventKey(),
-                        event.getPayload()
+                        event.getPayload(),
+                        event.getTraceParent(),
+                        event.getTraceState()
                 ))
                 .toList();
     }

@@ -8,6 +8,8 @@ public record OutboxClaim(
         Long aggregateId,
         String topic,
         String eventKey,
-        String payload
+        String payload,
+        String traceParent,
+        String traceState
 ) {
 }

@@ -37,6 +37,12 @@ public class OutboxEvent {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String payload;
 
+    @Column(name = "traceparent", length = 255)
+    private String traceParent;
+
+    @Column(name = "tracestate", length = 512)
+    private String traceState;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
