@@ -1,10 +1,14 @@
 package pl.chrisitstyle.order;
 
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.context.Scope;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.KafkaException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
+import pl.chrisitstyle.order.observability.OutboxTraceLinker;
 
 import java.util.concurrent.ExecutionException;
 
@@ -15,16 +19,20 @@ public class OutboxPublishingService {
 
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final OutboxStateService outboxStateService;
+    private final OutboxTraceLinker outboxTraceLinker;
 
     public void publish(OutboxClaim event, String workerId) {
-        try {
+        Span span = outboxTraceLinker.startLinkedSpan(event);
+
+        try (Scope ignored = span.makeCurrent()) {
             kafkaTemplate.send(
                     event.topic(),
                     event.eventKey(),
                     event.payload()
             ).get();
 
-            boolean markedAsPublished = outboxStateService.markPublished(event.id(), workerId);
+            boolean markedAsPublished =
+                    outboxStateService.markPublished(event.id(), workerId);
 
             if (markedAsPublished) {
                 log.info(
@@ -39,6 +47,8 @@ public class OutboxPublishingService {
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
 
+            recordFailure(span, exception);
+
             outboxStateService.release(event.id(), workerId);
 
             log.warn(
@@ -47,6 +57,8 @@ public class OutboxPublishingService {
             );
 
         } catch (ExecutionException exception) {
+            recordFailure(span, exception);
+
             outboxStateService.release(event.id(), workerId);
 
             log.warn(
@@ -57,6 +69,8 @@ public class OutboxPublishingService {
             );
 
         } catch (KafkaException exception) {
+            recordFailure(span, exception);
+
             outboxStateService.release(event.id(), workerId);
 
             log.warn(
@@ -65,6 +79,14 @@ public class OutboxPublishingService {
                     event.aggregateId(),
                     exception
             );
+
+        } finally {
+            span.end();
         }
+    }
+
+    private void recordFailure(Span span, Exception exception) {
+        span.recordException(exception);
+        span.setStatus(StatusCode.ERROR);
     }
 }
