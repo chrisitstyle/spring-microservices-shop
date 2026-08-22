@@ -224,6 +224,28 @@ services:
       keycloak:
         condition: service_started
 
+  api-gateway:
+    build:
+      context: ./api-gateway
+
+    ports:
+      - "8085:8085"
+
+    environment:
+      PRODUCT_SERVICE_URL: http://product-service:8081
+
+      ORDER_SERVICE_URL: http://order-service:8083
+
+      JWT_ISSUER_URI: http://localhost:8080/realms/spring-shop
+      JWT_JWK_SET_URI: http://keycloak:8080/realms/spring-shop/protocol/openid-connect/certs
+
+    depends_on:
+      product-service:
+        condition: service_started
+
+      order-service:
+        condition: service_started
+
   notification-service:
     build:
       context: ./notification-service
