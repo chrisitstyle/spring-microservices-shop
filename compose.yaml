@@ -158,6 +158,8 @@ services:
 
       OTEL_TRACES_ENDPOINT: http://tempo:4318/v1/traces
 
+      MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY: "false"
+
     depends_on:
       product-db:
         condition: service_healthy
@@ -181,6 +183,8 @@ services:
       JWT_JWK_SET_URI: http://keycloak:8080/realms/spring-shop/protocol/openid-connect/certs
 
       OTEL_TRACES_ENDPOINT: http://tempo:4318/v1/traces
+
+      MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY: "false"
 
     depends_on:
       user-db:
@@ -210,6 +214,8 @@ services:
       KEYCLOAK_TOKEN_URI: http://keycloak:8080/realms/spring-shop/protocol/openid-connect/token
 
       OTEL_TRACES_ENDPOINT: http://tempo:4318/v1/traces
+
+      MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY: "false"
 
     depends_on:
       order-db:
@@ -247,6 +253,8 @@ services:
 
       OTEL_TRACES_ENDPOINT: http://tempo:4318/v1/traces
 
+      MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY: "false"
+
     depends_on:
       product-service:
         condition: service_started
@@ -267,6 +275,8 @@ services:
       DB_URL: jdbc:postgresql://notification-db:5432/notification_db
       DB_USERNAME: notification_user
       DB_PASSWORD: notification_password
+
+      MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY: "false"
 
     depends_on:
       kafka:

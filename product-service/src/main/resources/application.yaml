@@ -28,6 +28,10 @@ server:
 
 
 management:
+  observations:
+    enable:
+      spring:
+        security: false
   endpoints:
     web:
       exposure:
