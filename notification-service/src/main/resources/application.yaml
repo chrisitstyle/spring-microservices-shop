@@ -13,6 +13,9 @@ spring:
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
+    listener:
+      observation-enabled: true
+
     consumer:
       group-id: notification-service
       auto-offset-reset: earliest
@@ -37,11 +40,21 @@ server:
 
 
 management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,prometheus,metrics
+  tracing:
+    sampling:
+      probability: 1.0
 
-  endpoint:
-    health:
-      show-details: always
+  opentelemetry:
+    resource-attributes:
+      service.name: ${spring.application.name}
+
+    tracing:
+      export:
+        otlp:
+          endpoint: ${OTEL_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+          transport: http
+
+  otlp:
+    metrics:
+      export:
+        enabled: false

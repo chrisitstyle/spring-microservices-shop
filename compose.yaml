@@ -278,12 +278,17 @@ services:
 
       MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY: "false"
 
+      OTEL_TRACES_ENDPOINT: http://tempo:4318/v1/traces
+
     depends_on:
       kafka:
         condition: service_healthy
 
       notification-db:
         condition: service_healthy
+
+      tempo:
+        condition: service_started
 
   prometheus:
     image: prom/prometheus
