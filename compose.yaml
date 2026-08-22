@@ -180,6 +180,8 @@ services:
       JWT_ISSUER_URI: http://localhost:8080/realms/spring-shop
       JWT_JWK_SET_URI: http://keycloak:8080/realms/spring-shop/protocol/openid-connect/certs
 
+      OTEL_TRACES_ENDPOINT: http://tempo:4318/v1/traces
+
     depends_on:
       user-db:
         condition: service_healthy
@@ -207,6 +209,8 @@ services:
       ORDER_SERVICE_CLIENT_SECRET: ${ORDER_SERVICE_CLIENT_SECRET}
       KEYCLOAK_TOKEN_URI: http://keycloak:8080/realms/spring-shop/protocol/openid-connect/token
 
+      OTEL_TRACES_ENDPOINT: http://tempo:4318/v1/traces
+
     depends_on:
       order-db:
         condition: service_healthy
@@ -221,6 +225,9 @@ services:
         condition: service_healthy
 
       keycloak:
+        condition: service_started
+
+      tempo:
         condition: service_started
 
   api-gateway:
