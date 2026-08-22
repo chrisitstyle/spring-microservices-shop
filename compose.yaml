@@ -280,6 +280,9 @@ services:
       notification-service:
         condition: service_started
 
+      api-gateway:
+        condition: service_started
+
   grafana:
     image: grafana/grafana
     ports:
