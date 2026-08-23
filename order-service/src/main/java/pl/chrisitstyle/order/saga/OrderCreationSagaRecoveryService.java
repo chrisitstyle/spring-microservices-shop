@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import pl.chrisitstyle.order.ProductClient;
 import pl.chrisitstyle.order.ProductReservationResponse;
 import pl.chrisitstyle.order.exception.OrderCreationException;
+import pl.chrisitstyle.order.exception.SagaRecoveryFencingException;
 
 import java.util.List;
 import java.util.UUID;
@@ -16,7 +17,12 @@ import java.util.UUID;
 public class OrderCreationSagaRecoveryService {
 
     private final ProductClient productClient;
+
     private final OrderCreationSagaStateService sagaStateService;
+
+    private final OrderCreationSagaFencedStateService
+            fencedStateService;
+
     private final OrderCreationSagaClaimService claimService;
 
     public void recover(
@@ -33,7 +39,9 @@ public class OrderCreationSagaRecoveryService {
         );
 
         OrderCreationSagaStatus status =
-                sagaStateService.getStatus(sagaId);
+                sagaStateService.getStatus(
+                        sagaId
+                );
 
         if (status.isTerminal()) {
             return;
@@ -48,33 +56,26 @@ public class OrderCreationSagaRecoveryService {
                 fence
         );
 
-        if (status != OrderCreationSagaStatus.COMPENSATING) {
-            requireLease(
+        if (status
+                != OrderCreationSagaStatus.COMPENSATING) {
+
+            fencedStateService.markCompensating(
                     sagaId,
                     workerId,
                     fence,
-                    leaseMs
-            );
-
-            sagaStateService.markCompensating(
-                    sagaId,
+                    leaseMs,
                     "Recovered after interrupted order creation"
             );
         }
 
         List<OrderCreationSagaReservation> reservations =
-                sagaStateService.getReservations(sagaId);
+                sagaStateService.getReservations(
+                        sagaId
+                );
 
         for (int i = reservations.size() - 1;
              i >= 0;
              i--) {
-
-            requireLease(
-                    sagaId,
-                    workerId,
-                    fence,
-                    leaseMs
-            );
 
             OrderCreationSagaReservation reservation =
                     reservations.get(i);
@@ -93,14 +94,11 @@ public class OrderCreationSagaRecoveryService {
             }
         }
 
-        requireLease(
+        fencedStateService.markCompensated(
                 sagaId,
                 workerId,
-                fence,
-                leaseMs
+                fence
         );
-
-        sagaStateService.markCompensated(sagaId);
 
         log.info(
                 "Interrupted order creation saga compensated: "
@@ -152,7 +150,7 @@ public class OrderCreationSagaRecoveryService {
     ) {
         try {
             /*
-             * Check ownership before performing the remote side effect.
+             * Renew and verify the lease before the remote side effect.
              */
             requireLease(
                     sagaId,
@@ -169,20 +167,15 @@ public class OrderCreationSagaRecoveryService {
                     );
 
             /*
-             * The HTTP call may have taken long enough for the lease
-             * to expire. Check ownership again before changing
-             * local saga state.
+             * This update is fenced atomically in PostgreSQL.
              */
-            requireLease(
+            fencedStateService.markReserved(
                     sagaId,
+                    reservation.getReservationKey(),
+                    response.unitPrice(),
                     workerId,
                     fence,
                     leaseMs
-            );
-
-            sagaStateService.markReserved(
-                    reservation.getReservationKey(),
-                    response.unitPrice()
             );
 
             return releaseReserved(
@@ -193,20 +186,18 @@ public class OrderCreationSagaRecoveryService {
                     leaseMs
             );
 
-        } catch (SagaRecoveryLeaseLostException leaseLost) {
-            throw leaseLost;
+        } catch (SagaRecoveryFencingException fencingFailure) {
+
+            throw fencingFailure;
 
         } catch (OrderCreationException definitiveRejection) {
 
-            requireLease(
+            fencedStateService.markReservationFailed(
                     sagaId,
+                    reservation.getReservationKey(),
                     workerId,
                     fence,
                     leaseMs
-            );
-
-            sagaStateService.markReservationFailed(
-                    reservation.getReservationKey()
             );
 
             return true;
@@ -219,7 +210,9 @@ public class OrderCreationSagaRecoveryService {
                     fence,
                     leaseMs,
                     "Could not resolve unknown reservation outcome: "
-                            + failureMessage(unknownFailure)
+                            + failureMessage(
+                            unknownFailure
+                    )
             );
 
             return false;
@@ -235,8 +228,8 @@ public class OrderCreationSagaRecoveryService {
     ) {
         try {
             /*
-             * Make sure this worker still owns the saga before
-             * executing the compensation.
+             * Verify ownership immediately before the remote
+             * compensation.
              */
             requireLease(
                     sagaId,
@@ -252,28 +245,22 @@ public class OrderCreationSagaRecoveryService {
             );
 
             /*
-             * The remote release may have succeeded while our lease
-             * expired. Verify ownership again before persisting
-             * RELEASED locally.
-             *
-             * If ownership was lost, the next worker can safely
-             * repeat release because the operation is idempotent.
+             * The local RELEASED transition verifies owner,
+             * fence and lease in the same PostgreSQL statement.
              */
-            requireLease(
+            fencedStateService.markReleased(
                     sagaId,
+                    reservation.getReservationKey(),
                     workerId,
                     fence,
                     leaseMs
             );
 
-            sagaStateService.markReleased(
-                    reservation.getReservationKey()
-            );
-
             return true;
 
-        } catch (SagaRecoveryLeaseLostException leaseLost) {
-            throw leaseLost;
+        } catch (SagaRecoveryFencingException fencingFailure) {
+
+            throw fencingFailure;
 
         } catch (RuntimeException compensationFailure) {
 
@@ -283,7 +270,9 @@ public class OrderCreationSagaRecoveryService {
                     fence,
                     leaseMs,
                     "Could not release stock reservation: "
-                            + failureMessage(compensationFailure)
+                            + failureMessage(
+                            compensationFailure
+                    )
             );
 
             return false;
@@ -305,8 +294,8 @@ public class OrderCreationSagaRecoveryService {
                 );
 
         if (!renewed) {
-            throw new SagaRecoveryLeaseLostException(
-                    "Saga recovery lease lost: "
+            throw new SagaRecoveryFencingException(
+                    "Saga recovery ownership lost: "
                             + "sagaId="
                             + sagaId
                             + ", workerId="
@@ -325,24 +314,17 @@ public class OrderCreationSagaRecoveryService {
             String reason
     ) {
         try {
-            /*
-             * A stale worker must not mark somebody else's saga
-             * as COMPENSATION_FAILED.
-             */
-            requireLease(
+            fencedStateService.markCompensationFailed(
                     sagaId,
                     workerId,
                     fence,
-                    leaseMs
-            );
-
-            sagaStateService.markCompensationFailed(
-                    sagaId,
+                    leaseMs,
                     reason
             );
 
-        } catch (SagaRecoveryLeaseLostException leaseLost) {
-            throw leaseLost;
+        } catch (SagaRecoveryFencingException fencingFailure) {
+
+            throw fencingFailure;
 
         } catch (RuntimeException persistenceFailure) {
 
@@ -368,15 +350,5 @@ public class OrderCreationSagaRecoveryService {
         }
 
         return exception.getMessage();
-    }
-
-    private static final class SagaRecoveryLeaseLostException
-            extends IllegalStateException {
-
-        private SagaRecoveryLeaseLostException(
-                String message
-        ) {
-            super(message);
-        }
     }
 }
