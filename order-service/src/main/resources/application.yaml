@@ -157,3 +157,5 @@ app:
       stale-after-ms: 120000
       initial-delay-ms: 30000
       fixed-delay-ms: 30000
+      lease-ms: 120000
+      batch-size: 10

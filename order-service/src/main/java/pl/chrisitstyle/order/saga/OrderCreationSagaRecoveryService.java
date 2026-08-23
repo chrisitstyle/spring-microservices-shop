@@ -17,22 +17,39 @@ public class OrderCreationSagaRecoveryService {
 
     private final ProductClient productClient;
     private final OrderCreationSagaStateService sagaStateService;
+    private final OrderCreationSagaClaimService claimService;
 
-    public void recover(UUID sagaId) {
+    public void recover(
+            UUID sagaId,
+            String workerId,
+            long leaseMs
+    ) {
+        requireLease(
+                sagaId,
+                workerId,
+                leaseMs
+        );
+
         OrderCreationSagaStatus status =
-                sagaStateService.getStatus(sagaId);
+                sagaStateService.getStatus(
+                        sagaId
+                );
 
         if (status.isTerminal()) {
             return;
         }
 
         log.warn(
-                "Recovering interrupted order creation saga: sagaId={}, status={}",
+                "Recovering interrupted order creation saga: "
+                        + "sagaId={}, status={}, workerId={}",
                 sagaId,
-                status
+                status,
+                workerId
         );
 
-        if (status != OrderCreationSagaStatus.COMPENSATING) {
+        if (status
+                != OrderCreationSagaStatus.COMPENSATING) {
+
             sagaStateService.markCompensating(
                     sagaId,
                     "Recovered after interrupted order creation"
@@ -40,11 +57,19 @@ public class OrderCreationSagaRecoveryService {
         }
 
         List<OrderCreationSagaReservation> reservations =
-                sagaStateService.getReservations(sagaId);
+                sagaStateService.getReservations(
+                        sagaId
+                );
 
         for (int i = reservations.size() - 1;
              i >= 0;
              i--) {
+
+            requireLease(
+                    sagaId,
+                    workerId,
+                    leaseMs
+            );
 
             OrderCreationSagaReservation reservation =
                     reservations.get(i);
@@ -52,7 +77,9 @@ public class OrderCreationSagaRecoveryService {
             boolean success =
                     compensateReservation(
                             sagaId,
-                            reservation
+                            reservation,
+                            workerId,
+                            leaseMs
                     );
 
             if (!success) {
@@ -60,17 +87,29 @@ public class OrderCreationSagaRecoveryService {
             }
         }
 
-        sagaStateService.markCompensated(sagaId);
+        requireLease(
+                sagaId,
+                workerId,
+                leaseMs
+        );
+
+        sagaStateService.markCompensated(
+                sagaId
+        );
 
         log.info(
-                "Interrupted order creation saga compensated: sagaId={}",
-                sagaId
+                "Interrupted order creation saga compensated: "
+                        + "sagaId={}, workerId={}",
+                sagaId,
+                workerId
         );
     }
 
     private boolean compensateReservation(
             UUID sagaId,
-            OrderCreationSagaReservation reservation
+            OrderCreationSagaReservation reservation,
+            String workerId,
+            long leaseMs
     ) {
         return switch (reservation.getStatus()) {
 
@@ -80,29 +119,34 @@ public class OrderCreationSagaRecoveryService {
             case RESERVED ->
                     releaseReserved(
                             sagaId,
-                            reservation
+                            reservation,
+                            workerId,
+                            leaseMs
                     );
 
             case PLANNED ->
                     reconcilePlannedAndRelease(
                             sagaId,
-                            reservation
+                            reservation,
+                            workerId,
+                            leaseMs
                     );
         };
     }
 
     private boolean reconcilePlannedAndRelease(
             UUID sagaId,
-            OrderCreationSagaReservation reservation
+            OrderCreationSagaReservation reservation,
+            String workerId,
+            long leaseMs
     ) {
         try {
-            /*
-             * We do not know whether the original HTTP call
-             * succeeded before the order-service crashed.
-             *
-             * Repeating the same command with the same
-             * idempotency key resolves that ambiguity.
-             */
+            requireLease(
+                    sagaId,
+                    workerId,
+                    leaseMs
+            );
+
             ProductReservationResponse response =
                     productClient.reserve(
                             reservation.getProductId(),
@@ -117,16 +161,13 @@ public class OrderCreationSagaRecoveryService {
 
             return releaseReserved(
                     sagaId,
-                    reservation
+                    reservation,
+                    workerId,
+                    leaseMs
             );
 
         } catch (OrderCreationException definitiveRejection) {
 
-            /*
-             * The reservation was definitively rejected.
-             * Therefore there is no successful stock side effect
-             * that still requires compensation.
-             */
             sagaStateService.markReservationFailed(
                     reservation.getReservationKey()
             );
@@ -138,7 +179,9 @@ public class OrderCreationSagaRecoveryService {
             markRecoveryFailed(
                     sagaId,
                     "Could not resolve unknown reservation outcome: "
-                            + failureMessage(unknownFailure)
+                            + failureMessage(
+                            unknownFailure
+                    )
             );
 
             return false;
@@ -147,9 +190,17 @@ public class OrderCreationSagaRecoveryService {
 
     private boolean releaseReserved(
             UUID sagaId,
-            OrderCreationSagaReservation reservation
+            OrderCreationSagaReservation reservation,
+            String workerId,
+            long leaseMs
     ) {
         try {
+            requireLease(
+                    sagaId,
+                    workerId,
+                    leaseMs
+            );
+
             productClient.release(
                     reservation.getProductId(),
                     reservation.getQuantity(),
@@ -167,10 +218,34 @@ public class OrderCreationSagaRecoveryService {
             markRecoveryFailed(
                     sagaId,
                     "Could not release stock reservation: "
-                            + failureMessage(compensationFailure)
+                            + failureMessage(
+                            compensationFailure
+                    )
             );
 
             return false;
+        }
+    }
+
+    private void requireLease(
+            UUID sagaId,
+            String workerId,
+            long leaseMs
+    ) {
+        boolean renewed =
+                claimService.renewLease(
+                        sagaId,
+                        workerId,
+                        leaseMs
+                );
+
+        if (!renewed) {
+            throw new IllegalStateException(
+                    "Saga recovery lease lost: sagaId="
+                            + sagaId
+                            + ", workerId="
+                            + workerId
+            );
         }
     }
 
@@ -183,7 +258,9 @@ public class OrderCreationSagaRecoveryService {
                     sagaId,
                     reason
             );
+
         } catch (RuntimeException persistenceFailure) {
+
             log.error(
                     "Could not persist saga recovery failure: sagaId={}",
                     sagaId,
