@@ -1,0 +1,49 @@
+groups:
+  - name: spring-shop-availability
+    rules:
+      - alert: ServiceDown
+        expr: up{job=~"api-gateway|product-service|user-service|order-service|notification-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Prometheus has been unable to scrape {{ $labels.job }} for at least 1 minute."
+
+      - alert: GatewayHigh5xxRate
+        expr: |
+          (
+            sum(rate(http_server_requests_seconds_count{
+              job="api-gateway",
+              status=~"5.."
+            }[5m]))
+            /
+            sum(rate(http_server_requests_seconds_count{
+              job="api-gateway"
+            }[5m]))
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API Gateway has a high 5xx rate"
+          description: "More than 5% of Gateway requests have resulted in 5xx responses for at least 2 minutes."
+
+  - name: spring-shop-messaging
+    rules:
+      - alert: OutboxBacklog
+        expr: outbox_pending_events > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Transactional outbox is not draining"
+          description: "There have been pending outbox events for at least 2 minutes."
+
+      - alert: NotificationDltEvent
+        expr: increase(notifications_dlt_total[5m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Notification event reached DLT"
+          description: "At least one notification event reached the dead-letter topic in the last 5 minutes."
