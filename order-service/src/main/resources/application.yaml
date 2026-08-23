@@ -149,3 +149,11 @@ logging:
   structured:
     format:
       console: ecs
+
+
+app:
+  saga:
+    recovery:
+      stale-after-ms: 120000
+      initial-delay-ms: 30000
+      fixed-delay-ms: 30000

@@ -4,11 +4,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pl.chrisitstyle.order.exception.*;
+import pl.chrisitstyle.order.saga.OrderCreationSagaOrchestrator;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -17,89 +16,29 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final UserClient userClient;
     private final ProductClient productClient;
-    private final OutboxService outboxService;
+    private final OrderCreationSagaOrchestrator orderCreationSagaOrchestrator;
 
-    @Transactional
     public OrderResponse create(
             String keycloakSubject,
             CreateOrderRequest request
     ) {
-        UserResponse user = userClient.getUserByKeycloakSubject(keycloakSubject);
+        UserResponse user =
+                userClient.getUserByKeycloakSubject(
+                        keycloakSubject
+                );
 
         if (!user.active()) {
             throw new OrderCreationException(
-                    "User " + user.id() + " is inactive"
+                    "User "
+                            + user.id()
+                            + " is inactive"
             );
         }
 
-        Order order = new Order();
-        order.setUserId(user.id());
-        order.setStatus(OrderStatus.CREATED);
-
-        BigDecimal totalAmount = BigDecimal.ZERO;
-        List<StockReservation> reservations = new ArrayList<>();
-
-        try {
-            for (CreateOrderItemRequest itemRequest : request.items()) {
-                /*
-                 * The idempotency key is generated before calling ProductClient.
-                 *
-                 * ProductClient.reserve() may be retried by Resilience4j.
-                 * Every retry must use exactly the same key so that
-                 * product-service recognizes it as the same logical operation.
-                 */
-                UUID idempotencyKey = UUID.randomUUID();
-
-                ProductReservationResponse reservation =
-                        productClient.reserve(
-                                itemRequest.productId(),
-                                itemRequest.quantity(),
-                                idempotencyKey
-                        );
-
-                reservations.add(
-                        new StockReservation(
-                                reservation.productId(),
-                                reservation.quantity(),
-                                idempotencyKey
-                        )
-                );
-
-                OrderItem orderItem = new OrderItem();
-                orderItem.setProductId(reservation.productId());
-                orderItem.setQuantity(reservation.quantity());
-                orderItem.setUnitPrice(reservation.unitPrice());
-                orderItem.setReservationKey(idempotencyKey);
-
-                order.addItem(orderItem);
-
-                BigDecimal itemTotal =
-                        reservation.unitPrice().multiply(
-                                BigDecimal.valueOf(reservation.quantity())
-                        );
-
-                totalAmount = totalAmount.add(itemTotal);
-            }
-
-            order.setTotalAmount(totalAmount);
-
-            Order savedOrder = orderRepository.save(order);
-
-            OrderCreatedEvent event = new OrderCreatedEvent(
-                    savedOrder.getId(),
-                    savedOrder.getUserId(),
-                    savedOrder.getTotalAmount(),
-                    savedOrder.getCreatedAt()
-            );
-
-            outboxService.saveOrderCreatedEvent(event);
-
-            return toResponse(savedOrder);
-
-        } catch (RuntimeException exception) {
-            releaseReservations(reservations);
-            throw exception;
-        }
+        return orderCreationSagaOrchestrator.create(
+                user.id(),
+                request
+        );
     }
 
     @Transactional(readOnly = true)
@@ -198,13 +137,11 @@ public class OrderService {
             OrderStatus newStatus
     ) {
         boolean validTransition = switch (currentStatus) {
-            case CREATED ->
-                    newStatus == OrderStatus.PAID
-                            || newStatus == OrderStatus.CANCELLED;
+            case CREATED -> newStatus == OrderStatus.PAID
+                    || newStatus == OrderStatus.CANCELLED;
 
-            case PAID ->
-                    newStatus == OrderStatus.COMPLETED
-                            || newStatus == OrderStatus.CANCELLED;
+            case PAID -> newStatus == OrderStatus.COMPLETED
+                    || newStatus == OrderStatus.CANCELLED;
 
             case COMPLETED, CANCELLED -> false;
         };
@@ -228,30 +165,6 @@ public class OrderService {
                 );
     }
 
-    private void releaseReservations(
-            List<StockReservation> reservations
-    ) {
-        /*
-         * Compensate reservations in reverse order.
-         *
-         * A reserved
-         * B reserved
-         * C reservation failed
-         *
-         * B released
-         * A released
-         */
-        for (int i = reservations.size() - 1; i >= 0; i--) {
-            StockReservation reservation = reservations.get(i);
-
-            productClient.release(
-                    reservation.productId(),
-                    reservation.quantity(),
-                    reservation.reservationKey()
-            );
-        }
-    }
-
     private OrderResponse toResponse(Order order) {
         List<OrderItemResponse> items = order.getItems()
                 .stream()
@@ -273,12 +186,5 @@ public class OrderService {
                 order.getCreatedAt(),
                 items
         );
-    }
-
-    private record StockReservation(
-            Long productId,
-            Integer quantity,
-            UUID reservationKey
-    ) {
     }
 }
