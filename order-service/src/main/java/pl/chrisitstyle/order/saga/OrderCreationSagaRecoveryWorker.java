@@ -7,7 +7,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.UUID;
 
 @Slf4j
 @Component
@@ -37,7 +36,7 @@ public class OrderCreationSagaRecoveryWorker {
         String workerId =
                 workerIdentity.value();
 
-        List<UUID> sagaIds =
+        List<SagaRecoveryClaim> claims =
                 claimService.claimRecoverable(
                         workerId,
                         staleAfterMs,
@@ -45,20 +44,12 @@ public class OrderCreationSagaRecoveryWorker {
                         batchSize
                 );
 
-        if (!sagaIds.isEmpty()) {
-            log.info(
-                    "Saga recovery worker claimed sagas: "
-                            + "workerId={}, sagaIds={}",
-                    workerId,
-                    sagaIds
-            );
-        }
-
-        for (UUID sagaId : sagaIds) {
+        for (SagaRecoveryClaim claim : claims) {
             try {
                 recoveryService.recover(
-                        sagaId,
+                        claim.sagaId(),
                         workerId,
+                        claim.fence(),
                         leaseMs
                 );
 
@@ -66,17 +57,19 @@ public class OrderCreationSagaRecoveryWorker {
 
                 log.error(
                         "Unexpected saga recovery failure: "
-                                + "sagaId={}, workerId={}",
-                        sagaId,
+                                + "sagaId={}, workerId={}, fence={}",
+                        claim.sagaId(),
                         workerId,
+                        claim.fence(),
                         exception
                 );
 
             } finally {
 
                 claimService.releaseClaim(
-                        sagaId,
-                        workerId
+                        claim.sagaId(),
+                        workerId,
+                        claim.fence()
                 );
             }
         }

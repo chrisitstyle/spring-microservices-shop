@@ -22,18 +22,18 @@ public class OrderCreationSagaRecoveryService {
     public void recover(
             UUID sagaId,
             String workerId,
+            long fence,
             long leaseMs
     ) {
         requireLease(
                 sagaId,
                 workerId,
+                fence,
                 leaseMs
         );
 
         OrderCreationSagaStatus status =
-                sagaStateService.getStatus(
-                        sagaId
-                );
+                sagaStateService.getStatus(sagaId);
 
         if (status.isTerminal()) {
             return;
@@ -41,14 +41,20 @@ public class OrderCreationSagaRecoveryService {
 
         log.warn(
                 "Recovering interrupted order creation saga: "
-                        + "sagaId={}, status={}, workerId={}",
+                        + "sagaId={}, status={}, workerId={}, fence={}",
                 sagaId,
                 status,
-                workerId
+                workerId,
+                fence
         );
 
-        if (status
-                != OrderCreationSagaStatus.COMPENSATING) {
+        if (status != OrderCreationSagaStatus.COMPENSATING) {
+            requireLease(
+                    sagaId,
+                    workerId,
+                    fence,
+                    leaseMs
+            );
 
             sagaStateService.markCompensating(
                     sagaId,
@@ -57,9 +63,7 @@ public class OrderCreationSagaRecoveryService {
         }
 
         List<OrderCreationSagaReservation> reservations =
-                sagaStateService.getReservations(
-                        sagaId
-                );
+                sagaStateService.getReservations(sagaId);
 
         for (int i = reservations.size() - 1;
              i >= 0;
@@ -68,6 +72,7 @@ public class OrderCreationSagaRecoveryService {
             requireLease(
                     sagaId,
                     workerId,
+                    fence,
                     leaseMs
             );
 
@@ -79,6 +84,7 @@ public class OrderCreationSagaRecoveryService {
                             sagaId,
                             reservation,
                             workerId,
+                            fence,
                             leaseMs
                     );
 
@@ -90,18 +96,18 @@ public class OrderCreationSagaRecoveryService {
         requireLease(
                 sagaId,
                 workerId,
+                fence,
                 leaseMs
         );
 
-        sagaStateService.markCompensated(
-                sagaId
-        );
+        sagaStateService.markCompensated(sagaId);
 
         log.info(
                 "Interrupted order creation saga compensated: "
-                        + "sagaId={}, workerId={}",
+                        + "sagaId={}, workerId={}, fence={}",
                 sagaId,
-                workerId
+                workerId,
+                fence
         );
     }
 
@@ -109,6 +115,7 @@ public class OrderCreationSagaRecoveryService {
             UUID sagaId,
             OrderCreationSagaReservation reservation,
             String workerId,
+            long fence,
             long leaseMs
     ) {
         return switch (reservation.getStatus()) {
@@ -121,6 +128,7 @@ public class OrderCreationSagaRecoveryService {
                             sagaId,
                             reservation,
                             workerId,
+                            fence,
                             leaseMs
                     );
 
@@ -129,6 +137,7 @@ public class OrderCreationSagaRecoveryService {
                             sagaId,
                             reservation,
                             workerId,
+                            fence,
                             leaseMs
                     );
         };
@@ -138,12 +147,17 @@ public class OrderCreationSagaRecoveryService {
             UUID sagaId,
             OrderCreationSagaReservation reservation,
             String workerId,
+            long fence,
             long leaseMs
     ) {
         try {
+            /*
+             * Check ownership before performing the remote side effect.
+             */
             requireLease(
                     sagaId,
                     workerId,
+                    fence,
                     leaseMs
             );
 
@@ -154,6 +168,18 @@ public class OrderCreationSagaRecoveryService {
                             reservation.getReservationKey()
                     );
 
+            /*
+             * The HTTP call may have taken long enough for the lease
+             * to expire. Check ownership again before changing
+             * local saga state.
+             */
+            requireLease(
+                    sagaId,
+                    workerId,
+                    fence,
+                    leaseMs
+            );
+
             sagaStateService.markReserved(
                     reservation.getReservationKey(),
                     response.unitPrice()
@@ -163,10 +189,21 @@ public class OrderCreationSagaRecoveryService {
                     sagaId,
                     reservation,
                     workerId,
+                    fence,
                     leaseMs
             );
 
+        } catch (SagaRecoveryLeaseLostException leaseLost) {
+            throw leaseLost;
+
         } catch (OrderCreationException definitiveRejection) {
+
+            requireLease(
+                    sagaId,
+                    workerId,
+                    fence,
+                    leaseMs
+            );
 
             sagaStateService.markReservationFailed(
                     reservation.getReservationKey()
@@ -178,10 +215,11 @@ public class OrderCreationSagaRecoveryService {
 
             markRecoveryFailed(
                     sagaId,
+                    workerId,
+                    fence,
+                    leaseMs,
                     "Could not resolve unknown reservation outcome: "
-                            + failureMessage(
-                            unknownFailure
-                    )
+                            + failureMessage(unknownFailure)
             );
 
             return false;
@@ -192,12 +230,18 @@ public class OrderCreationSagaRecoveryService {
             UUID sagaId,
             OrderCreationSagaReservation reservation,
             String workerId,
+            long fence,
             long leaseMs
     ) {
         try {
+            /*
+             * Make sure this worker still owns the saga before
+             * executing the compensation.
+             */
             requireLease(
                     sagaId,
                     workerId,
+                    fence,
                     leaseMs
             );
 
@@ -207,20 +251,39 @@ public class OrderCreationSagaRecoveryService {
                     reservation.getReservationKey()
             );
 
+            /*
+             * The remote release may have succeeded while our lease
+             * expired. Verify ownership again before persisting
+             * RELEASED locally.
+             *
+             * If ownership was lost, the next worker can safely
+             * repeat release because the operation is idempotent.
+             */
+            requireLease(
+                    sagaId,
+                    workerId,
+                    fence,
+                    leaseMs
+            );
+
             sagaStateService.markReleased(
                     reservation.getReservationKey()
             );
 
             return true;
 
+        } catch (SagaRecoveryLeaseLostException leaseLost) {
+            throw leaseLost;
+
         } catch (RuntimeException compensationFailure) {
 
             markRecoveryFailed(
                     sagaId,
+                    workerId,
+                    fence,
+                    leaseMs,
                     "Could not release stock reservation: "
-                            + failureMessage(
-                            compensationFailure
-                    )
+                            + failureMessage(compensationFailure)
             );
 
             return false;
@@ -230,40 +293,65 @@ public class OrderCreationSagaRecoveryService {
     private void requireLease(
             UUID sagaId,
             String workerId,
+            long fence,
             long leaseMs
     ) {
         boolean renewed =
                 claimService.renewLease(
                         sagaId,
                         workerId,
+                        fence,
                         leaseMs
                 );
 
         if (!renewed) {
-            throw new IllegalStateException(
-                    "Saga recovery lease lost: sagaId="
+            throw new SagaRecoveryLeaseLostException(
+                    "Saga recovery lease lost: "
+                            + "sagaId="
                             + sagaId
                             + ", workerId="
                             + workerId
+                            + ", fence="
+                            + fence
             );
         }
     }
 
     private void markRecoveryFailed(
             UUID sagaId,
+            String workerId,
+            long fence,
+            long leaseMs,
             String reason
     ) {
         try {
+            /*
+             * A stale worker must not mark somebody else's saga
+             * as COMPENSATION_FAILED.
+             */
+            requireLease(
+                    sagaId,
+                    workerId,
+                    fence,
+                    leaseMs
+            );
+
             sagaStateService.markCompensationFailed(
                     sagaId,
                     reason
             );
 
+        } catch (SagaRecoveryLeaseLostException leaseLost) {
+            throw leaseLost;
+
         } catch (RuntimeException persistenceFailure) {
 
             log.error(
-                    "Could not persist saga recovery failure: sagaId={}",
+                    "Could not persist saga recovery failure: "
+                            + "sagaId={}, workerId={}, fence={}",
                     sagaId,
+                    workerId,
+                    fence,
                     persistenceFailure
             );
         }
@@ -280,5 +368,15 @@ public class OrderCreationSagaRecoveryService {
         }
 
         return exception.getMessage();
+    }
+
+    private static final class SagaRecoveryLeaseLostException
+            extends IllegalStateException {
+
+        private SagaRecoveryLeaseLostException(
+                String message
+        ) {
+            super(message);
+        }
     }
 }
