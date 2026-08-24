@@ -165,10 +165,11 @@ jobs:
         working-directory: product-service
         env:
           PACT_CONSUMER_BRANCH: ${{ env.PACT_BRANCH }}
-          pact.verifier.publishResults: "true"
-          pact.provider.version: ${{ env.PACT_VERSION }}
-          pact.provider.branch: ${{ env.PACT_BRANCH }}
-          pact.verifier.buildUrl: ${{ env.BUILD_URL }}
+          JAVA_TOOL_OPTIONS: >-
+            -Dpact.verifier.publishResults=true
+            -Dpact.provider.version=${{ env.PACT_VERSION }}
+            -Dpact.provider.branch=${{ env.PACT_BRANCH }}
+            -Dpact.verifier.buildUrl=${{ env.BUILD_URL }}
         run: |
           ./mvnw \
             -B \
