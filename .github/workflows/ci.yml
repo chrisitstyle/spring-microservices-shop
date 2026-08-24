@@ -111,12 +111,29 @@ jobs:
 
       - name: Wait for Pact Broker
         run: |
-          curl \
-            --fail \
-            --retry 30 \
-            --retry-delay 2 \
-            --retry-connrefused \
-            http://localhost:9292/diagnostic/status/heartbeat
+          echo "Waiting for Pact Broker..."
+
+          for attempt in {1..30}; do
+            if curl \
+              --fail \
+              --silent \
+              --show-error \
+              --max-time 5 \
+              http://localhost:9292/diagnostic/status/dependencies \
+              > /dev/null; then
+
+              echo "Pact Broker is ready."
+              exit 0
+            fi
+
+            echo "Pact Broker not ready yet - attempt ${attempt}/30"
+            sleep 2
+          done
+
+          echo "Pact Broker did not become ready."
+          docker compose ps
+          docker compose logs pact-broker-db pact-broker-server
+          exit 1
 
       - name: Generate consumer Pact
         working-directory: order-service
