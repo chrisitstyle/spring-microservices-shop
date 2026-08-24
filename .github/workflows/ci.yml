@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  service-tests:
+    name: Test ${{ matrix.service }}
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 25
+
+    strategy:
+      fail-fast: false
+
+      matrix:
+        service:
+          - api-gateway
+          - product-service
+          - user-service
+          - order-service
+          - notification-service
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+          cache-dependency-path: ${{ matrix.service }}/pom.xml
+
+      - name: Make Maven Wrapper executable
+        working-directory: ${{ matrix.service }}
+        run: chmod +x mvnw
+
+      - name: Verify Java
+        run: java --version
+
+      - name: Verify Docker
+        run: docker info
+
+      - name: Run tests
+        working-directory: ${{ matrix.service }}
+        run: >
+          ./mvnw
+          -B
+          test
+          "-Dsurefire.excludes=**/*PactTest.*"
