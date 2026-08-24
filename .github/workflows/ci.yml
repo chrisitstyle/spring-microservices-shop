@@ -66,3 +66,117 @@ jobs:
           -B
           test
           "-Dsurefire.excludes=**/*PactTest.*"
+
+  contract-tests:
+    name: Pact contract tests
+
+    needs:
+      - service-tests
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 20
+
+    env:
+      PACT_BROKER_BASE_URL: http://localhost:9292
+      PACT_VERSION: ${{ github.sha }}
+      PACT_BRANCH: ${{ github.head_ref || github.ref_name }}
+      BUILD_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+          cache-dependency-path: |
+            order-service/pom.xml
+            product-service/pom.xml
+
+      - name: Make Maven Wrappers executable
+        run: |
+          chmod +x order-service/mvnw
+          chmod +x product-service/mvnw
+
+      - name: Verify Docker
+        run: docker info
+
+      - name: Start Pact Broker
+        run: |
+          docker compose up -d pact-broker-db pact-broker-server
+
+      - name: Wait for Pact Broker
+        run: |
+          curl \
+            --fail \
+            --retry 30 \
+            --retry-delay 2 \
+            --retry-connrefused \
+            http://localhost:9292/diagnostic/status/heartbeat
+
+      - name: Generate consumer Pact
+        working-directory: order-service
+        run: |
+          ./mvnw \
+            -B \
+            -Dtest=ProductClientPactTest \
+            test
+
+      - name: Show generated Pact files
+        run: |
+          ls -la order-service/target/pacts
+
+      - name: Publish consumer Pact
+        run: |
+          docker run \
+            --rm \
+            --network host \
+            -v "${GITHUB_WORKSPACE}/order-service/target/pacts:/pacts:ro" \
+            pactfoundation/pact-cli:1.5.0.5 \
+            pact-broker publish \
+            /pacts \
+            --consumer-app-version "${PACT_VERSION}" \
+            --branch "${PACT_BRANCH}" \
+            --build-url "${BUILD_URL}" \
+            --broker-base-url "${PACT_BROKER_BASE_URL}"
+
+      - name: Verify provider Pact
+        working-directory: product-service
+        env:
+          PACT_CONSUMER_BRANCH: ${{ env.PACT_BRANCH }}
+          pact.verifier.publishResults: "true"
+          pact.provider.version: ${{ env.PACT_VERSION }}
+          pact.provider.branch: ${{ env.PACT_BRANCH }}
+          pact.verifier.buildUrl: ${{ env.BUILD_URL }}
+        run: |
+          ./mvnw \
+            -B \
+            -Dtest=ProductProviderPactTest \
+            test
+
+      - name: Can I deploy
+        run: |
+          docker run \
+            --rm \
+            --network host \
+            pactfoundation/pact-cli:1.5.0.5 \
+            pact-broker can-i-deploy \
+            --pacticipant order-service \
+            --version "${PACT_VERSION}" \
+            --pacticipant product-service \
+            --version "${PACT_VERSION}" \
+            --broker-base-url "${PACT_BROKER_BASE_URL}"
+
+      - name: Show Pact Broker logs on failure
+        if: failure()
+        run: |
+          docker compose logs pact-broker-db pact-broker-server
+
+      - name: Stop Pact Broker
+        if: always()
+        run: |
+          docker compose down -v

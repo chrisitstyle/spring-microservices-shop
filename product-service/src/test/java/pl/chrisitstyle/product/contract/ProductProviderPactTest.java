@@ -63,8 +63,18 @@ class ProductProviderPactTest {
 
     @PactBrokerConsumerVersionSelectors
     public static SelectorBuilder consumerVersionSelectors() {
+
+        String consumerBranch =
+                System.getenv()
+                        .getOrDefault(
+                                "PACT_CONSUMER_BRANCH",
+                                "main"
+                        );
+
         return new SelectorBuilder()
-                .branch("main");
+                .branch(
+                        consumerBranch
+                );
     }
 
     @BeforeEach
