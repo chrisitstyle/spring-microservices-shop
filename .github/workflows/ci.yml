@@ -394,3 +394,56 @@ jobs:
           docker compose down \
             -v \
             --remove-orphans
+
+  docker-build:
+    name: Build image ${{ matrix.service }}
+
+    needs:
+      - e2e
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 25
+
+    strategy:
+      fail-fast: false
+
+      matrix:
+        service:
+          - api-gateway
+          - product-service
+          - user-service
+          - order-service
+          - notification-service
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Verify Docker
+        run: |
+          docker --version
+          docker info
+
+      - name: Build Docker image
+        env:
+          SERVICE: ${{ matrix.service }}
+          IMAGE_TAG: spring-microservices-shop/${{ matrix.service }}:${{ github.sha }}
+        run: |
+          echo "Building ${IMAGE_TAG}"
+
+          docker build \
+            --tag "${IMAGE_TAG}" \
+            "${SERVICE}"
+
+      - name: Inspect Docker image
+        env:
+          IMAGE_TAG: spring-microservices-shop/${{ matrix.service }}:${{ github.sha }}
+        run: |
+          docker image inspect "${IMAGE_TAG}"
+
+      - name: Show Docker image
+        env:
+          IMAGE_TAG: spring-microservices-shop/${{ matrix.service }}:${{ github.sha }}
+        run: |
+          docker image ls "${IMAGE_TAG}"
