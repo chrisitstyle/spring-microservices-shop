@@ -303,7 +303,8 @@ jobs:
                 --no-color \
                 "${service}" \
                 2>&1 \
-                | grep -q "Started .*Application"; then
+                | grep -E "Started .*Application" \
+                > /dev/null; then
 
                 echo "${service} is ready."
                 return 0
