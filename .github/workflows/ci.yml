@@ -1,0 +1,449 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  service-tests:
+    name: Test ${{ matrix.service }}
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 25
+
+    strategy:
+      fail-fast: false
+
+      matrix:
+        service:
+          - api-gateway
+          - product-service
+          - user-service
+          - order-service
+          - notification-service
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+          cache-dependency-path: ${{ matrix.service }}/pom.xml
+
+      - name: Make Maven Wrapper executable
+        working-directory: ${{ matrix.service }}
+        run: chmod +x mvnw
+
+      - name: Verify Java
+        run: java --version
+
+      - name: Verify Docker
+        run: docker info
+
+      - name: Run tests
+        working-directory: ${{ matrix.service }}
+        run: >
+          ./mvnw
+          -B
+          test
+          "-Dsurefire.excludes=**/*PactTest.*"
+
+  contract-tests:
+    name: Pact contract tests
+
+    needs:
+      - service-tests
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 20
+
+    env:
+      PACT_BROKER_BASE_URL: http://localhost:9292
+      PACT_VERSION: ${{ github.sha }}
+      PACT_BRANCH: ${{ github.head_ref || github.ref_name }}
+      BUILD_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+          cache-dependency-path: |
+            order-service/pom.xml
+            product-service/pom.xml
+
+      - name: Make Maven Wrappers executable
+        run: |
+          chmod +x order-service/mvnw
+          chmod +x product-service/mvnw
+
+      - name: Verify Docker
+        run: docker info
+
+      - name: Start Pact Broker
+        run: |
+          docker compose up -d pact-broker-db pact-broker-server
+
+      - name: Wait for Pact Broker
+        run: |
+          echo "Waiting for Pact Broker..."
+
+          for attempt in {1..30}; do
+            if curl \
+              --fail \
+              --silent \
+              --show-error \
+              --max-time 5 \
+              http://localhost:9292/diagnostic/status/dependencies \
+              > /dev/null; then
+
+              echo "Pact Broker is ready."
+              exit 0
+            fi
+
+            echo "Pact Broker not ready yet - attempt ${attempt}/30"
+            sleep 2
+          done
+
+          echo "Pact Broker did not become ready."
+          docker compose ps
+          docker compose logs pact-broker-db pact-broker-server
+          exit 1
+
+      - name: Generate consumer Pact
+        working-directory: order-service
+        run: |
+          ./mvnw \
+            -B \
+            -Dtest=ProductClientPactTest \
+            test
+
+      - name: Show generated Pact files
+        run: |
+          ls -la order-service/target/pacts
+
+      - name: Publish consumer Pact
+        run: |
+          docker run \
+            --rm \
+            --network host \
+            -v "${GITHUB_WORKSPACE}/order-service/target/pacts:/pacts:ro" \
+            pactfoundation/pact-cli:1.5.0.5 \
+            pact-broker publish \
+            /pacts \
+            --consumer-app-version "${PACT_VERSION}" \
+            --branch "${PACT_BRANCH}" \
+            --build-url "${BUILD_URL}" \
+            --broker-base-url "${PACT_BROKER_BASE_URL}"
+
+      - name: Verify provider Pact
+        working-directory: product-service
+        env:
+          PACT_CONSUMER_BRANCH: ${{ env.PACT_BRANCH }}
+          JAVA_TOOL_OPTIONS: >-
+            -Dpact.verifier.publishResults=true
+            -Dpact.provider.version=${{ env.PACT_VERSION }}
+            -Dpact.provider.branch=${{ env.PACT_BRANCH }}
+            -Dpact.verifier.buildUrl=${{ env.BUILD_URL }}
+        run: |
+          ./mvnw \
+            -B \
+            -Dtest=ProductProviderPactTest \
+            test
+
+      - name: Can I deploy
+        run: |
+          docker run \
+            --rm \
+            --network host \
+            pactfoundation/pact-cli:1.5.0.5 \
+            pact-broker can-i-deploy \
+            --pacticipant order-service \
+            --version "${PACT_VERSION}" \
+            --pacticipant product-service \
+            --version "${PACT_VERSION}" \
+            --broker-base-url "${PACT_BROKER_BASE_URL}"
+
+      - name: Show Pact Broker logs on failure
+        if: failure()
+        run: |
+          docker compose logs pact-broker-db pact-broker-server
+
+      - name: Stop Pact Broker
+        if: always()
+        run: |
+          docker compose down -v
+
+  e2e:
+    name: End-to-end tests
+
+    needs:
+      - service-tests
+      - contract-tests
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 35
+
+    env:
+      ORDER_SERVICE_CLIENT_SECRET: ci-order-service-secret
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+          cache-dependency-path: e2e-tests/pom.xml
+
+      - name: Verify Java
+        run: java --version
+
+      - name: Verify Maven
+        run: mvn --version
+
+      - name: Verify Docker
+        run: |
+          docker --version
+          docker compose version
+          docker info
+
+      - name: Start E2E system
+        run: |
+          docker compose up \
+            -d \
+            --build \
+            api-gateway \
+            notification-service
+
+      - name: Show running containers
+        run: |
+          docker compose ps
+
+      - name: Wait for Keycloak
+        run: |
+          echo "Waiting for Keycloak realm..."
+
+          for attempt in {1..60}; do
+            if curl \
+              --fail \
+              --silent \
+              --show-error \
+              --max-time 5 \
+              http://localhost:8080/realms/spring-shop/.well-known/openid-configuration \
+              > /dev/null; then
+
+              echo "Keycloak is ready."
+              exit 0
+            fi
+
+            echo "Keycloak not ready yet - attempt ${attempt}/60"
+            sleep 2
+          done
+
+          echo "Keycloak did not become ready."
+          docker compose ps
+          docker compose logs keycloak keycloak-db
+          exit 1
+
+      - name: Wait for Spring services
+        shell: bash
+        run: |
+          wait_for_service() {
+            local service="$1"
+
+            echo "Waiting for ${service}..."
+
+            for attempt in {1..90}; do
+              container_id="$(docker compose ps -q "${service}")"
+
+              if [ -n "${container_id}" ]; then
+                state="$(docker inspect \
+                  --format '{{.State.Status}}' \
+                  "${container_id}" \
+                  2>/dev/null || true)"
+
+                if [ "${state}" = "exited" ] || [ "${state}" = "dead" ]; then
+                  echo "${service} stopped unexpectedly."
+                  docker compose logs "${service}"
+                  exit 1
+                fi
+              fi
+
+              if docker compose logs \
+                --no-color \
+                "${service}" \
+                2>&1 \
+                | grep -E "Started .*Application" \
+                > /dev/null; then
+
+                echo "${service} is ready."
+                return 0
+              fi
+
+              echo "${service} not ready yet - attempt ${attempt}/90"
+              sleep 2
+            done
+
+            echo "${service} did not become ready."
+            docker compose logs "${service}"
+            exit 1
+          }
+
+          wait_for_service product-service
+          wait_for_service user-service
+          wait_for_service order-service
+          wait_for_service notification-service
+          wait_for_service api-gateway
+
+      - name: Verify Gateway routing
+        run: |
+          echo "Waiting for Gateway -> Product Service route..."
+
+          for attempt in {1..30}; do
+            if curl \
+              --fail \
+              --silent \
+              --show-error \
+              --max-time 5 \
+              http://localhost:8085/products \
+              > /dev/null; then
+
+              echo "Gateway routing is ready."
+              exit 0
+            fi
+
+            echo "Gateway route not ready yet - attempt ${attempt}/30"
+            sleep 2
+          done
+
+          echo "Gateway routing did not become ready."
+          docker compose ps
+          docker compose logs api-gateway product-service
+          exit 1
+
+      - name: Run E2E tests
+        working-directory: e2e-tests
+        run: |
+          mvn \
+            -B \
+            test
+
+      - name: Show Docker status on failure
+        if: failure()
+        run: |
+          echo "=== Docker Compose status ==="
+          docker compose ps -a
+
+      - name: Show application logs on failure
+        if: failure()
+        run: |
+          echo "=== API Gateway ==="
+          docker compose logs --no-color api-gateway
+
+          echo "=== Product Service ==="
+          docker compose logs --no-color product-service
+
+          echo "=== User Service ==="
+          docker compose logs --no-color user-service
+
+          echo "=== Order Service ==="
+          docker compose logs --no-color order-service
+
+          echo "=== Notification Service ==="
+          docker compose logs --no-color notification-service
+
+          echo "=== Keycloak ==="
+          docker compose logs --no-color keycloak
+
+          echo "=== Kafka ==="
+          docker compose logs --no-color kafka
+
+      - name: Stop E2E system
+        if: always()
+        run: |
+          docker compose down \
+            -v \
+            --remove-orphans
+
+  docker-build:
+    name: Build image ${{ matrix.service }}
+
+    needs:
+      - e2e
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 25
+
+    strategy:
+      fail-fast: false
+
+      matrix:
+        service:
+          - api-gateway
+          - product-service
+          - user-service
+          - order-service
+          - notification-service
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Verify Docker
+        run: |
+          docker --version
+          docker info
+
+      - name: Build Docker image
+        env:
+          SERVICE: ${{ matrix.service }}
+          IMAGE_TAG: spring-microservices-shop/${{ matrix.service }}:${{ github.sha }}
+        run: |
+          echo "Building ${IMAGE_TAG}"
+
+          docker build \
+            --tag "${IMAGE_TAG}" \
+            "${SERVICE}"
+
+      - name: Inspect Docker image
+        env:
+          IMAGE_TAG: spring-microservices-shop/${{ matrix.service }}:${{ github.sha }}
+        run: |
+          docker image inspect "${IMAGE_TAG}"
+
+      - name: Show Docker image
+        env:
+          IMAGE_TAG: spring-microservices-shop/${{ matrix.service }}:${{ github.sha }}
+        run: |
+          docker image ls "${IMAGE_TAG}"
