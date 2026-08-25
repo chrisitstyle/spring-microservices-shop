@@ -1,0 +1,712 @@
+# ============================================================
+# PRODUCT SERVICE
+# ============================================================
+
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: product-service
+  namespace: spring-shop
+
+spec:
+  selector:
+    app: product-service
+
+  ports:
+    - name: http
+      port: 8081
+      targetPort: 8081
+
+---
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: product-service
+  namespace: spring-shop
+
+spec:
+  replicas: 1
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
+  selector:
+    matchLabels:
+      app: product-service
+
+  template:
+    metadata:
+      labels:
+        app: product-service
+
+    spec:
+      terminationGracePeriodSeconds: 30
+
+      containers:
+        - name: product-service
+          image: spring-shop/product-service:k8s-local
+          imagePullPolicy: Never
+
+          ports:
+            - name: http
+              containerPort: 8081
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: 256Mi
+
+            limits:
+              cpu: "1"
+              memory: 768Mi
+
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8081
+
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 24
+
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8081
+
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8081
+
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          env:
+            - name: DB_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: PRODUCT_DB_URL
+
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: spring-shop-secrets
+                  key: PRODUCT_DB_USERNAME
+
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: spring-shop-secrets
+                  key: PRODUCT_DB_PASSWORD
+
+            - name: JWT_ISSUER_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: JWT_ISSUER_URI
+
+            - name: JWT_JWK_SET_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: JWT_JWK_SET_URI
+
+            - name: OTEL_TRACES_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: OTEL_TRACES_ENDPOINT
+
+            - name: MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY
+
+---
+# ============================================================
+# USER SERVICE
+# ============================================================
+
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: user-service
+  namespace: spring-shop
+
+spec:
+  selector:
+    app: user-service
+
+  ports:
+    - name: http
+      port: 8082
+      targetPort: 8082
+
+---
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: user-service
+  namespace: spring-shop
+
+spec:
+  replicas: 1
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
+  selector:
+    matchLabels:
+      app: user-service
+
+  template:
+    metadata:
+      labels:
+        app: user-service
+
+    spec:
+      terminationGracePeriodSeconds: 30
+
+      containers:
+        - name: user-service
+          image: spring-shop/user-service:k8s-local
+          imagePullPolicy: Never
+
+          ports:
+            - name: http
+              containerPort: 8082
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: 256Mi
+
+            limits:
+              cpu: "1"
+              memory: 768Mi
+
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8082
+
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 24
+
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8082
+
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8082
+
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          env:
+            - name: DB_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: USER_DB_URL
+
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: spring-shop-secrets
+                  key: USER_DB_USERNAME
+
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: spring-shop-secrets
+                  key: USER_DB_PASSWORD
+
+            - name: JWT_ISSUER_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: JWT_ISSUER_URI
+
+            - name: JWT_JWK_SET_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: JWT_JWK_SET_URI
+
+            - name: OTEL_TRACES_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: OTEL_TRACES_ENDPOINT
+
+            - name: MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY
+
+---
+# ============================================================
+# ORDER SERVICE
+# ============================================================
+
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: order-service
+  namespace: spring-shop
+
+spec:
+  selector:
+    app: order-service
+
+  ports:
+    - name: http
+      port: 8083
+      targetPort: 8083
+
+---
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: order-service
+  namespace: spring-shop
+
+spec:
+  replicas: 1
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
+  selector:
+    matchLabels:
+      app: order-service
+
+  template:
+    metadata:
+      labels:
+        app: order-service
+
+    spec:
+      terminationGracePeriodSeconds: 30
+
+      containers:
+        - name: order-service
+          image: spring-shop/order-service:k8s-local
+          imagePullPolicy: Never
+
+          ports:
+            - name: http
+              containerPort: 8083
+
+          resources:
+            requests:
+              cpu: "150m"
+              memory: 384Mi
+
+            limits:
+              cpu: "1"
+              memory: 1Gi
+
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8083
+
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 24
+
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8083
+
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8083
+
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          env:
+            - name: DB_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: ORDER_DB_URL
+
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: spring-shop-secrets
+                  key: ORDER_DB_USERNAME
+
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: spring-shop-secrets
+                  key: ORDER_DB_PASSWORD
+
+            - name: USER_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: USER_SERVICE_URL
+
+            - name: PRODUCT_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: PRODUCT_SERVICE_URL
+
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: KAFKA_BOOTSTRAP_SERVERS
+
+            - name: JWT_ISSUER_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: JWT_ISSUER_URI
+
+            - name: JWT_JWK_SET_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: JWT_JWK_SET_URI
+
+            - name: KEYCLOAK_TOKEN_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: KEYCLOAK_TOKEN_URI
+
+            - name: ORDER_SERVICE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: spring-shop-secrets
+                  key: ORDER_SERVICE_CLIENT_SECRET
+
+            - name: OTEL_TRACES_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: OTEL_TRACES_ENDPOINT
+
+            - name: MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY
+
+---
+# ============================================================
+# NOTIFICATION SERVICE
+# ============================================================
+
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: notification-service
+  namespace: spring-shop
+
+spec:
+  selector:
+    app: notification-service
+
+  ports:
+    - name: http
+      port: 8084
+      targetPort: 8084
+
+---
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: notification-service
+  namespace: spring-shop
+
+spec:
+  replicas: 1
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
+  selector:
+    matchLabels:
+      app: notification-service
+
+  template:
+    metadata:
+      labels:
+        app: notification-service
+
+    spec:
+      terminationGracePeriodSeconds: 30
+
+      containers:
+        - name: notification-service
+          image: spring-shop/notification-service:k8s-local
+          imagePullPolicy: Never
+
+          ports:
+            - name: http
+              containerPort: 8084
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: 256Mi
+
+            limits:
+              cpu: "1"
+              memory: 768Mi
+
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8084
+
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 24
+
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8084
+
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8084
+
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          env:
+            - name: DB_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: NOTIFICATION_DB_URL
+
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: spring-shop-secrets
+                  key: NOTIFICATION_DB_USERNAME
+
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: spring-shop-secrets
+                  key: NOTIFICATION_DB_PASSWORD
+
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: KAFKA_BOOTSTRAP_SERVERS
+
+            - name: OTEL_TRACES_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: OTEL_TRACES_ENDPOINT
+
+            - name: MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY
+
+---
+# ============================================================
+# API GATEWAY
+# ============================================================
+
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: api-gateway
+  namespace: spring-shop
+
+spec:
+  type: NodePort
+
+  selector:
+    app: api-gateway
+
+  ports:
+    - name: http
+      port: 8085
+      targetPort: 8085
+      nodePort: 30085
+
+---
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: api-gateway
+  namespace: spring-shop
+
+spec:
+  replicas: 1
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
+  selector:
+    matchLabels:
+      app: api-gateway
+
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+
+    spec:
+      terminationGracePeriodSeconds: 30
+
+      containers:
+        - name: api-gateway
+          image: spring-shop/api-gateway:k8s-local
+          imagePullPolicy: Never
+
+          ports:
+            - name: http
+              containerPort: 8085
+
+            - name: management
+              containerPort: 9085
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: 256Mi
+
+            limits:
+              cpu: "1"
+              memory: 768Mi
+
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 9085
+
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 24
+
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 9085
+
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 9085
+
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          env:
+            - name: PRODUCT_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: PRODUCT_SERVICE_URL
+
+            - name: ORDER_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: ORDER_SERVICE_URL
+
+            - name: JWT_ISSUER_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: JWT_ISSUER_URI
+
+            - name: JWT_JWK_SET_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: JWT_JWK_SET_URI
+
+            - name: OTEL_TRACES_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: OTEL_TRACES_ENDPOINT
+
+            - name: MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY

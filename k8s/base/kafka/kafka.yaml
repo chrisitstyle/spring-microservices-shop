@@ -1,0 +1,143 @@
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: kafka
+  namespace: spring-shop
+
+spec:
+  selector:
+    app: kafka
+
+  ports:
+    - name: broker
+      port: 19092
+      targetPort: 19092
+
+---
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: kafka-headless
+  namespace: spring-shop
+
+spec:
+  clusterIP: None
+
+  publishNotReadyAddresses: true
+
+  selector:
+    app: kafka
+
+  ports:
+    - name: broker
+      port: 19092
+      targetPort: 19092
+
+    - name: controller
+      port: 29093
+      targetPort: 29093
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+
+metadata:
+  name: kafka
+  namespace: spring-shop
+
+spec:
+  serviceName: kafka-headless
+
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: kafka
+
+  template:
+    metadata:
+      labels:
+        app: kafka
+
+    spec:
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+
+      containers:
+        - name: kafka
+          image: apache/kafka:4.3.1
+
+          ports:
+            - name: broker
+              containerPort: 19092
+
+            - name: controller
+              containerPort: 29093
+
+          env:
+            - name: KAFKA_NODE_ID
+              value: "1"
+
+            - name: KAFKA_PROCESS_ROLES
+              value: broker,controller
+
+            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+              value: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+
+            - name: KAFKA_LISTENERS
+              value: CONTROLLER://:29093,PLAINTEXT://:19092
+
+            - name: KAFKA_ADVERTISED_LISTENERS
+              value: PLAINTEXT://kafka-0.kafka-headless:19092
+
+            - name: KAFKA_INTER_BROKER_LISTENER_NAME
+              value: PLAINTEXT
+
+            - name: KAFKA_CONTROLLER_LISTENER_NAMES
+              value: CONTROLLER
+
+            - name: KAFKA_CONTROLLER_QUORUM_VOTERS
+              value: 1@kafka-0.kafka-headless:29093
+
+            - name: CLUSTER_ID
+              value: 4L6g3nShT-eMCtK--X86sw
+
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "1"
+
+            - name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS
+              value: "0"
+
+            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+              value: "1"
+
+            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+              value: "1"
+
+            - name: KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR
+              value: "1"
+
+            - name: KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR
+              value: "1"
+
+            - name: KAFKA_LOG_DIRS
+              value: /var/lib/kafka/data
+
+          volumeMounts:
+            - name: kafka-data
+              mountPath: /var/lib/kafka/data
+
+  volumeClaimTemplates:
+    - metadata:
+        name: kafka-data
+
+      spec:
+        accessModes:
+          - ReadWriteOnce
+
+        resources:
+          requests:
+            storage: 2Gi
