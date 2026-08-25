@@ -135,6 +135,18 @@ spec:
                   name: spring-shop-config
                   key: MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY
 
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: REDIS_HOST
+
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: REDIS_PORT
+
 ---
 # ============================================================
 # USER SERVICE

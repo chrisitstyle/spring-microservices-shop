@@ -1,6 +1,9 @@
 package pl.chrisitstyle.product;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheConfig;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pl.chrisitstyle.product.domain.Product;
@@ -14,6 +17,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@CacheConfig(cacheNames = "products")
 public class ProductService {
 
     private final ProductRepository productRepository;
@@ -34,9 +38,18 @@ public class ProductService {
         return toResponse(savedProduct);
     }
 
-    public ProductResponse getById(Long id){
-        Product product = productRepository.findById(id)
-                .orElseThrow(() -> new ProductNotFoundException("Product not found " + id));
+    @Transactional(readOnly = true)
+    @Cacheable(key = "#id")
+    public ProductResponse getById(Long id) {
+
+        Product product =
+                productRepository
+                        .findById(id)
+                        .orElseThrow(() ->
+                                new ProductNotFoundException(
+                                        "Product not found " + id
+                                )
+                        );
 
         return toResponse(product);
     }
@@ -50,6 +63,7 @@ public class ProductService {
     }
 
     @Transactional
+    @CacheEvict(key = "#id")
     public ProductResponse update(Long id, UpdateProductRequest request) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new ProductNotFoundException("Product not found " + id));
@@ -64,6 +78,7 @@ public class ProductService {
     }
 
     @Transactional
+    @CacheEvict(key = "#id")
     public void delete(Long id) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new ProductNotFoundException("Product not found " + id));
@@ -73,6 +88,7 @@ public class ProductService {
     }
 
     @Transactional
+    @CacheEvict(key = "#id")
     public ProductReservationResponse reserve(
             Long id,
             StockRequest request,
@@ -132,6 +148,7 @@ public class ProductService {
     }
 
     @Transactional
+    @CacheEvict(key = "#id")
     public void release(
             Long id,
             StockRequest request,

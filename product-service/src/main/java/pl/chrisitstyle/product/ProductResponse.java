@@ -1,5 +1,6 @@
 package pl.chrisitstyle.product;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
@@ -11,5 +12,5 @@ public record ProductResponse(
         Integer stockQuantity,
         Boolean active,
         OffsetDateTime createdAt
-) {
+) implements Serializable {
 }
