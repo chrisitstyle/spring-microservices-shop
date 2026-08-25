@@ -1,0 +1,132 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: product-service-canary
+  namespace: spring-shop
+
+spec:
+  replicas: 1
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
+  selector:
+    matchLabels:
+      app: product-service
+      track: canary
+
+  template:
+    metadata:
+      labels:
+        app: product-service
+        track: canary
+
+    spec:
+      terminationGracePeriodSeconds: 30
+
+      containers:
+        - name: product-service
+          image: spring-shop/product-service:canary
+          imagePullPolicy: Never
+
+          ports:
+            - name: http
+              containerPort: 8081
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: 256Mi
+
+            limits:
+              cpu: "1"
+              memory: 768Mi
+
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8081
+
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 24
+
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8081
+
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8081
+
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          env:
+            - name: DB_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: PRODUCT_DB_URL
+
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: spring-shop-secrets
+                  key: PRODUCT_DB_USERNAME
+
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: spring-shop-secrets
+                  key: PRODUCT_DB_PASSWORD
+
+            - name: JWT_ISSUER_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: JWT_ISSUER_URI
+
+            - name: JWT_JWK_SET_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: JWT_JWK_SET_URI
+
+            - name: OTEL_TRACES_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: OTEL_TRACES_ENDPOINT
+
+            - name: MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY
+
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: REDIS_HOST
+
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: REDIS_PORT
+
+            - name: RELEASE_VERSION
+              value: canary
