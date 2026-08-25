@@ -6,14 +6,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.cache.Cache;
-import org.springframework.cache.CacheManager;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -39,6 +35,7 @@ class ProductCacheIntegrationTest {
             );
 
     @Container
+    @ServiceConnection(name = "redis")
     static final GenericContainer<?> redis =
             new GenericContainer<>(
                     "redis:8-alpine"
@@ -47,24 +44,6 @@ class ProductCacheIntegrationTest {
                             6379
                     );
 
-    @DynamicPropertySource
-    static void redisProperties(
-            DynamicPropertyRegistry registry
-    ) {
-
-        registry.add(
-                "spring.data.redis.host",
-                redis::getHost
-        );
-
-        registry.add(
-                "spring.data.redis.port",
-                () -> redis.getMappedPort(
-                        6379
-                )
-        );
-    }
-
 
     @Autowired
     private ProductService productService;
@@ -72,31 +51,49 @@ class ProductCacheIntegrationTest {
     @Autowired
     private ProductRepository productRepository;
 
-
-    @Autowired
-    private CacheManager cacheManager;
-
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
 
     @BeforeEach
-    void cleanState() {
+    void cleanState() throws Exception {
+
+        var ping =
+                redis.execInContainer(
+                        "redis-cli",
+                        "ping"
+                );
+
+        assertThat(
+                ping.getExitCode()
+        )
+                .as("Redis Testcontainer should be available")
+                .isZero();
+
+        assertThat(
+                ping.getStdout().trim()
+        )
+                .isEqualTo("PONG");
+
+
+        var flush =
+                redis.execInContainer(
+                        "redis-cli",
+                        "FLUSHDB"
+                );
+
+        assertThat(
+                flush.getExitCode()
+        )
+                .as("Redis database should be flushed")
+                .isZero();
+
 
         jdbcTemplate.update(
                 "DELETE FROM stock_reservation_requests"
         );
 
         productRepository.deleteAll();
-
-        Cache productsCache =
-                cacheManager.getCache(
-                        "products"
-                );
-
-        if (productsCache != null) {
-            productsCache.clear();
-        }
     }
 
 
@@ -115,12 +112,23 @@ class ProductCacheIntegrationTest {
                 savedProduct.getId();
 
 
+        // First read loads the product from PostgreSQL
+        // and should put it into Redis.
         ProductResponse firstResponse =
                 productService.getById(
                         productId
                 );
 
+        assertThat(
+                firstResponse.description()
+        )
+                .isEqualTo(
+                        "Original description"
+                );
 
+
+        // Change PostgreSQL directly, bypassing ProductService
+        // and therefore bypassing cache eviction.
         jdbcTemplate.update(
                 """
                 UPDATE products
@@ -132,24 +140,39 @@ class ProductCacheIntegrationTest {
         );
 
 
+        // If Redis cache works, the second read must still return
+        // the old cached value.
         ProductResponse secondResponse =
                 productService.getById(
                         productId
                 );
 
-
         assertThat(
-                firstResponse.description()
+                secondResponse.description()
         )
+                .as("Second read should come from Redis cache")
                 .isEqualTo(
                         "Original description"
                 );
 
+
+        // PostgreSQL itself really contains the changed value.
+        String descriptionInDatabase =
+                jdbcTemplate.queryForObject(
+                        """
+                        SELECT description
+                        FROM products
+                        WHERE id = ?
+                        """,
+                        String.class,
+                        productId
+                );
+
         assertThat(
-                secondResponse.description()
+                descriptionInDatabase
         )
                 .isEqualTo(
-                        "Original description"
+                        "Changed directly in PostgreSQL"
                 );
     }
 
@@ -169,6 +192,32 @@ class ProductCacheIntegrationTest {
                 savedProduct.getId();
 
 
+        // Populate Redis.
+        ProductResponse firstResponse =
+                productService.getById(
+                        productId
+                );
+
+        assertThat(
+                firstResponse.description()
+        )
+                .isEqualTo(
+                        "Original description"
+                );
+
+
+        // Prove that the cached value is really being used.
+        jdbcTemplate.update(
+                """
+                UPDATE products
+                SET description = ?
+                WHERE id = ?
+                """,
+                "Changed directly in PostgreSQL",
+                productId
+        );
+
+
         ProductResponse cachedResponse =
                 productService.getById(
                         productId
@@ -177,11 +226,14 @@ class ProductCacheIntegrationTest {
         assertThat(
                 cachedResponse.description()
         )
+                .as("Value should still come from Redis before update")
                 .isEqualTo(
                         "Original description"
                 );
 
 
+        // ProductService.update() should update PostgreSQL
+        // and evict the cached product.
         productService.update(
                 productId,
                 new UpdateProductRequest(
@@ -194,15 +246,37 @@ class ProductCacheIntegrationTest {
         );
 
 
+        String descriptionInDatabase =
+                jdbcTemplate.queryForObject(
+                        """
+                        SELECT description
+                        FROM products
+                        WHERE id = ?
+                        """,
+                        String.class,
+                        productId
+                );
+
+        assertThat(
+                descriptionInDatabase
+        )
+                .as("Product should be updated in PostgreSQL")
+                .isEqualTo(
+                        "Updated description"
+                );
+
+
+        // If @CacheEvict worked, this read cannot return
+        // "Original description" anymore.
         ProductResponse responseAfterUpdate =
                 productService.getById(
                         productId
                 );
 
-
         assertThat(
                 responseAfterUpdate.description()
         )
+                .as("GET after update should load the new value")
                 .isEqualTo(
                         "Updated description"
                 );
@@ -226,19 +300,8 @@ class ProductCacheIntegrationTest {
         UUID reservationKey =
                 UUID.randomUUID();
 
-        Cache productsCache =
-                cacheManager.getCache(
-                        "products"
-                );
 
-        assertThat(productsCache)
-                .isNotNull();
-
-
-        // ========================================================
-        // POPULATE CACHE
-        // ========================================================
-
+        // Populate Redis with stock = 10.
         ProductResponse beforeReservation =
                 productService.getById(
                         productId
@@ -249,17 +312,34 @@ class ProductCacheIntegrationTest {
         )
                 .isEqualTo(10);
 
+
+        // Prove that this product is really cached.
+        jdbcTemplate.update(
+                """
+                UPDATE products
+                SET description = ?
+                WHERE id = ?
+                """,
+                "Changed directly in PostgreSQL",
+                productId
+        );
+
+
+        ProductResponse cachedResponse =
+                productService.getById(
+                        productId
+                );
+
         assertThat(
-                productsCache.get(productId)
+                cachedResponse.description()
         )
-                .as("Product should be cached before reservation")
-                .isNotNull();
+                .as("Value should come from Redis before reservation")
+                .isEqualTo(
+                        "Original description"
+                );
 
 
-        // ========================================================
-        // RESERVE
-        // ========================================================
-
+        // Reserve 3 units.
         productService.reserve(
                 productId,
                 new StockRequest(3),
@@ -267,7 +347,6 @@ class ProductCacheIntegrationTest {
         );
 
 
-        // First verify PostgreSQL itself.
         Integer stockInDatabaseAfterReserve =
                 jdbcTemplate.queryForObject(
                         """
@@ -282,18 +361,11 @@ class ProductCacheIntegrationTest {
         assertThat(
                 stockInDatabaseAfterReserve
         )
-                .as("Stock should be updated in PostgreSQL")
+                .as("Reservation should update PostgreSQL")
                 .isEqualTo(7);
 
 
-        // Then verify cache eviction independently.
-        assertThat(
-                productsCache.get(productId)
-        )
-                .as("Cache should be evicted after reserve")
-                .isNull();
-
-
+        // Without cache eviction this would still return 10.
         ProductResponse afterReservation =
                 productService.getById(
                         productId
@@ -302,21 +374,11 @@ class ProductCacheIntegrationTest {
         assertThat(
                 afterReservation.stockQuantity()
         )
+                .as("GET after reservation should return updated stock")
                 .isEqualTo(7);
 
 
-        // GET should populate cache again.
-        assertThat(
-                productsCache.get(productId)
-        )
-                .as("Product should be cached again after GET")
-                .isNotNull();
-
-
-        // ========================================================
-        // RELEASE
-        // ========================================================
-
+        // Release the same reservation.
         productService.release(
                 productId,
                 new StockRequest(3),
@@ -338,17 +400,11 @@ class ProductCacheIntegrationTest {
         assertThat(
                 stockInDatabaseAfterRelease
         )
-                .as("Stock should be restored in PostgreSQL")
+                .as("Release should restore stock in PostgreSQL")
                 .isEqualTo(10);
 
 
-        assertThat(
-                productsCache.get(productId)
-        )
-                .as("Cache should be evicted after release")
-                .isNull();
-
-
+        // Without cache eviction this would still return 7.
         ProductResponse afterRelease =
                 productService.getById(
                         productId
@@ -357,6 +413,7 @@ class ProductCacheIntegrationTest {
         assertThat(
                 afterRelease.stockQuantity()
         )
+                .as("GET after release should return restored stock")
                 .isEqualTo(10);
     }
 
