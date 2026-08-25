@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: keycloak-db
+  namespace: spring-shop
+
+spec:
+  clusterIP: None
+
+  selector:
+    app: keycloak-db
+
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+
+metadata:
+  name: keycloak-db
+  namespace: spring-shop
+
+spec:
+  serviceName: keycloak-db
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: keycloak-db
+
+  template:
+    metadata:
+      labels:
+        app: keycloak-db
+
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17
+
+          ports:
+            - name: postgres
+              containerPort: 5432
+
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: KEYCLOAK_DB_NAME
+
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: spring-shop-secrets
+                  key: KEYCLOAK_DB_USERNAME
+
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: spring-shop-secrets
+                  key: KEYCLOAK_DB_PASSWORD
+
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+
+          volumeMounts:
+            - name: keycloak-db-data
+              mountPath: /var/lib/postgresql/data
+
+  volumeClaimTemplates:
+    - metadata:
+        name: keycloak-db-data
+
+      spec:
+        accessModes:
+          - ReadWriteOnce
+
+        resources:
+          requests:
+            storage: 1Gi

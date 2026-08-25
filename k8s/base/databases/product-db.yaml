@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: product-db
+  namespace: spring-shop
+
+spec:
+  clusterIP: None
+
+  selector:
+    app: product-db
+
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+
+metadata:
+  name: product-db
+  namespace: spring-shop
+
+spec:
+  serviceName: product-db
+
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: product-db
+
+  template:
+    metadata:
+      labels:
+        app: product-db
+
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17
+
+          ports:
+            - name: postgres
+              containerPort: 5432
+
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: spring-shop-config
+                  key: PRODUCT_DB_NAME
+
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: spring-shop-secrets
+                  key: PRODUCT_DB_USERNAME
+
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: spring-shop-secrets
+                  key: PRODUCT_DB_PASSWORD
+
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+
+          volumeMounts:
+            - name: product-db-data
+              mountPath: /var/lib/postgresql/data
+
+  volumeClaimTemplates:
+    - metadata:
+        name: product-db-data
+
+      spec:
+        accessModes:
+          - ReadWriteOnce
+
+        resources:
+          requests:
+            storage: 1Gi
