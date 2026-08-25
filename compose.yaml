@@ -171,6 +171,21 @@ services:
       pact-broker-db:
         condition: service_healthy
 
+  redis:
+    image: redis:8-alpine
+
+    ports:
+      - "6379:6379"
+
+    healthcheck:
+      test:
+        - CMD
+        - redis-cli
+        - ping
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   product-service:
     build:
       context: ./product-service
@@ -187,6 +202,9 @@ services:
 
       MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY: "false"
 
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
     depends_on:
       product-db:
         condition: service_healthy
@@ -196,6 +214,9 @@ services:
 
       tempo:
         condition: service_started
+
+      redis:
+        condition: service_healthy
 
   user-service:
     build:
