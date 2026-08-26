@@ -38,11 +38,13 @@ spec:
   selector:
     matchLabels:
       app: product-service
+      track: stable
 
   template:
     metadata:
       labels:
         app: product-service
+        track: stable
 
     spec:
       terminationGracePeriodSeconds: 30
@@ -146,6 +148,9 @@ spec:
                 configMapKeyRef:
                   name: spring-shop-config
                   key: REDIS_PORT
+
+            - name: RELEASE_VERSION
+              value: stable
 
 ---
 # ============================================================

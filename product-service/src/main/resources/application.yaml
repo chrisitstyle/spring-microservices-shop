@@ -72,3 +72,6 @@ logging:
   structured:
     format:
       console: ecs
+
+app:
+  release-version: ${RELEASE_VERSION:stable}
