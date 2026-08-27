@@ -14,6 +14,10 @@ spring:
             connectTimeout: 2000
             readTimeout: 2000
 
+          user-service:
+            connectTimeout: 2000
+            readTimeout: 2000
+
   security:
     oauth2:
       resourceserver:
@@ -65,12 +69,6 @@ spring:
 
 server:
   port: 8083
-
-
-services:
-  user:
-    url: ${USER_SERVICE_URL:http://user-service}
-
 
 management:
   endpoints:
