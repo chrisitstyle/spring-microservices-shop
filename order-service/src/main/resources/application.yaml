@@ -2,21 +2,14 @@ spring:
   application:
     name: order-service
 
+  config:
+    import: "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+
   cloud:
     openfeign:
       oauth2:
         enabled: true
         client-registration-id: order-service-client
-
-      client:
-        config:
-          product-service:
-            connectTimeout: 2000
-            readTimeout: 2000
-
-          user-service:
-            connectTimeout: 2000
-            readTimeout: 2000
 
   security:
     oauth2:

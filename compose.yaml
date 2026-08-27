@@ -349,8 +349,6 @@ services:
       DB_USERNAME: order_user
       DB_PASSWORD: order_password
 
-      USER_SERVICE_URL: http://user-service
-
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
 
       JWT_ISSUER_URI: http://localhost:8080/realms/spring-shop
@@ -366,6 +364,8 @@ services:
       EUREKA_DEFAULT_ZONE: http://discovery-server:8761/eureka/
       EUREKA_INSTANCE_HOSTNAME: order-service
       EUREKA_INSTANCE_INSTANCE_ID: order-service:8083
+
+      CONFIG_SERVER_URL: http://config-server:8888
 
     depends_on:
       order-db:
@@ -452,6 +452,18 @@ services:
 
       tempo:
         condition: service_started
+
+  config-server:
+    build:
+      context: ./config-server
+    container_name: config-server
+    ports:
+      - "8888:8888"
+    environment:
+      CONFIG_REPO_LOCATION: file:/config-repo
+    volumes:
+      - ./config-repo:/config-repo:ro
+    restart: unless-stopped
 
   prometheus:
     image: prom/prometheus
