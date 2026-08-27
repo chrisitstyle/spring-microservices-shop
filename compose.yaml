@@ -246,6 +246,8 @@ services:
       EUREKA_INSTANCE_HOSTNAME: product-service
       EUREKA_INSTANCE_INSTANCE_ID: product-service-1:8081
 
+      CONFIG_SERVER_URL: http://config-server:8888
+
     depends_on:
       product-db:
         condition: service_healthy
@@ -261,6 +263,9 @@ services:
 
       discovery-server:
         condition: service_started
+
+      config-server:
+        condition: service_healthy
 
   product-service-2:
     build:
@@ -288,6 +293,8 @@ services:
       EUREKA_INSTANCE_HOSTNAME: product-service-2
       EUREKA_INSTANCE_INSTANCE_ID: product-service-2:8081
 
+      CONFIG_SERVER_URL: http://config-server:8888
+
     depends_on:
       product-db:
         condition: service_healthy
@@ -303,6 +310,9 @@ services:
 
       discovery-server:
         condition: service_started
+
+      config-server:
+        condition: service_healthy
 
   user-service:
     build:
@@ -327,6 +337,8 @@ services:
       EUREKA_INSTANCE_HOSTNAME: user-service
       EUREKA_INSTANCE_INSTANCE_ID: user-service:8082
 
+      CONFIG_SERVER_URL: http://config-server:8888
+
     depends_on:
       user-db:
         condition: service_healthy
@@ -336,6 +348,9 @@ services:
 
       discovery-server:
         condition: service_started
+
+      config-server:
+        condition: service_healthy
 
   order-service:
     build:
@@ -391,6 +406,9 @@ services:
 
       discovery-server:
         condition: service_started
+
+      config-server:
+        condition: service_healthy
 
   api-gateway:
     build:
@@ -456,13 +474,25 @@ services:
   config-server:
     build:
       context: ./config-server
+
     container_name: config-server
+
     ports:
       - "8888:8888"
+
     environment:
       CONFIG_REPO_LOCATION: file:/config-repo
+
     volumes:
       - ./config-repo:/config-repo:ro
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888/actuator/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
     restart: unless-stopped
 
   prometheus:

@@ -2,6 +2,9 @@ spring:
   application:
     name: product-service
 
+  config:
+    import: "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -75,13 +78,3 @@ logging:
 
 app:
   release-version: ${RELEASE_VERSION:stable}
-
-
-eureka:
-
-  client:
-    service-url:
-      defaultZone: ${EUREKA_DEFAULT_ZONE:http://localhost:8761/eureka/}
-
-  instance:
-    instance-id: ${spring.application.name}:${server.port}
