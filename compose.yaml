@@ -242,11 +242,12 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
 
-      EUREKA_DEFAULT_ZONE: http://discovery-server:8761/eureka/
       EUREKA_INSTANCE_HOSTNAME: product-service
       EUREKA_INSTANCE_INSTANCE_ID: product-service-1:8081
 
       CONFIG_SERVER_URL: http://config-server:8888
+
+      SPRING_PROFILES_ACTIVE: docker
 
     depends_on:
       product-db:
@@ -289,11 +290,12 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
 
-      EUREKA_DEFAULT_ZONE: http://discovery-server:8761/eureka/
       EUREKA_INSTANCE_HOSTNAME: product-service-2
       EUREKA_INSTANCE_INSTANCE_ID: product-service-2:8081
 
       CONFIG_SERVER_URL: http://config-server:8888
+
+      SPRING_PROFILES_ACTIVE: docker
 
     depends_on:
       product-db:
@@ -333,11 +335,12 @@ services:
 
       MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY: "false"
 
-      EUREKA_DEFAULT_ZONE: http://discovery-server:8761/eureka/
       EUREKA_INSTANCE_HOSTNAME: user-service
       EUREKA_INSTANCE_INSTANCE_ID: user-service:8082
 
       CONFIG_SERVER_URL: http://config-server:8888
+
+      SPRING_PROFILES_ACTIVE: docker
 
     depends_on:
       user-db:
@@ -376,11 +379,12 @@ services:
 
       MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY: "false"
 
-      EUREKA_DEFAULT_ZONE: http://discovery-server:8761/eureka/
       EUREKA_INSTANCE_HOSTNAME: order-service
       EUREKA_INSTANCE_INSTANCE_ID: order-service:8083
 
       CONFIG_SERVER_URL: http://config-server:8888
+
+      SPRING_PROFILES_ACTIVE: docker
 
     depends_on:
       order-db:
@@ -426,9 +430,12 @@ services:
 
       MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY: "false"
 
-      EUREKA_DEFAULT_ZONE: http://discovery-server:8761/eureka/
       EUREKA_INSTANCE_HOSTNAME: api-gateway
       EUREKA_INSTANCE_INSTANCE_ID: api-gateway:8085
+
+      CONFIG_SERVER_URL: http://config-server:8888
+
+      SPRING_PROFILES_ACTIVE: docker
 
     depends_on:
       product-service:
@@ -445,6 +452,9 @@ services:
 
       discovery-server:
         condition: service_started
+
+      config-server:
+        condition: service_healthy
 
   notification-service:
     build:
