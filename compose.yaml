@@ -1,14 +1,18 @@
 services:
   product-db:
     image: postgres:17
+
     environment:
       POSTGRES_DB: product_db
       POSTGRES_USER: product_user
       POSTGRES_PASSWORD: product_password
+
     ports:
       - "5433:5432"
+
     volumes:
       - product-db-data:/var/lib/postgresql/data
+
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U product_user -d product_db"]
       interval: 5s
@@ -17,14 +21,18 @@ services:
 
   user-db:
     image: postgres:17
+
     environment:
       POSTGRES_DB: user_db
       POSTGRES_USER: user_user
       POSTGRES_PASSWORD: user_password
+
     ports:
       - "5434:5432"
+
     volumes:
       - user-db-data:/var/lib/postgresql/data
+
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U user_user -d user_db"]
       interval: 5s
@@ -33,14 +41,18 @@ services:
 
   order-db:
     image: postgres:17
+
     environment:
       POSTGRES_DB: order_db
       POSTGRES_USER: order_user
       POSTGRES_PASSWORD: order_password
+
     ports:
       - "5435:5432"
+
     volumes:
       - order-db-data:/var/lib/postgresql/data
+
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U order_user -d order_db"]
       interval: 5s
@@ -49,14 +61,18 @@ services:
 
   notification-db:
     image: postgres:17
+
     environment:
       POSTGRES_DB: notification_db
       POSTGRES_USER: notification_user
       POSTGRES_PASSWORD: notification_password
+
     ports:
       - "5436:5432"
+
     volumes:
       - notification-db-data:/var/lib/postgresql/data
+
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U notification_user -d notification_db"]
       interval: 5s
@@ -65,12 +81,15 @@ services:
 
   keycloak-db:
     image: postgres:17
+
     environment:
       POSTGRES_DB: keycloak
       POSTGRES_USER: keycloak_user
       POSTGRES_PASSWORD: keycloak_password
+
     volumes:
       - keycloak-db-data:/var/lib/postgresql/data
+
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U keycloak_user -d keycloak"]
       interval: 5s
@@ -79,12 +98,15 @@ services:
 
   pact-broker-db:
     image: postgres:17
+
     environment:
       POSTGRES_DB: pact_broker
       POSTGRES_USER: pact_broker_user
       POSTGRES_PASSWORD: pact_broker_password
+
     volumes:
       - pact-broker-db-data:/var/lib/postgresql/data
+
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U pact_broker_user -d pact_broker"]
       interval: 5s
@@ -94,6 +116,7 @@ services:
   kafka:
     image: apache/kafka:4.3.1
     hostname: kafka
+
     ports:
       - "9092:9092"
 
@@ -135,6 +158,7 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.7.1
     command: start-dev --import-realm
+
     ports:
       - "8080:8080"
 
@@ -160,13 +184,16 @@ services:
 
   pact-broker-server:
     image: pactfoundation/pact-broker:2.142.0-pactbroker2.120.0
+
     ports:
       - "9292:9292"
+
     environment:
       PACT_BROKER_DATABASE_URL: postgres://pact_broker_user:pact_broker_password@pact-broker-db:5432/pact_broker
       PACT_BROKER_BASE_URLS: "http://localhost:9292 http://host.docker.internal:9292"
       PACT_BROKER_LOG_LEVEL: INFO
       PACT_DO_NOT_TRACK: "true"
+
     depends_on:
       pact-broker-db:
         condition: service_healthy
@@ -186,9 +213,19 @@ services:
       timeout: 3s
       retries: 10
 
+  discovery-server:
+    build:
+      context: ./discovery-server
+
+    ports:
+      - "8761:8761"
+
   product-service:
     build:
       context: ./product-service
+
+    ports:
+      - "8181:8081"
 
     environment:
       DB_URL: jdbc:postgresql://product-db:5432/product_db
@@ -205,6 +242,10 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
 
+      EUREKA_DEFAULT_ZONE: http://discovery-server:8761/eureka/
+      EUREKA_INSTANCE_HOSTNAME: product-service
+      EUREKA_INSTANCE_INSTANCE_ID: product-service-1:8081
+
     depends_on:
       product-db:
         condition: service_healthy
@@ -218,9 +259,57 @@ services:
       redis:
         condition: service_healthy
 
+      discovery-server:
+        condition: service_started
+
+  product-service-2:
+    build:
+      context: ./product-service
+
+    ports:
+      - "8182:8081"
+
+    environment:
+      DB_URL: jdbc:postgresql://product-db:5432/product_db
+      DB_USERNAME: product_user
+      DB_PASSWORD: product_password
+
+      JWT_ISSUER_URI: http://localhost:8080/realms/spring-shop
+      JWT_JWK_SET_URI: http://keycloak:8080/realms/spring-shop/protocol/openid-connect/certs
+
+      OTEL_TRACES_ENDPOINT: http://tempo:4318/v1/traces
+
+      MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY: "false"
+
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+      EUREKA_DEFAULT_ZONE: http://discovery-server:8761/eureka/
+      EUREKA_INSTANCE_HOSTNAME: product-service-2
+      EUREKA_INSTANCE_INSTANCE_ID: product-service-2:8081
+
+    depends_on:
+      product-db:
+        condition: service_healthy
+
+      keycloak:
+        condition: service_started
+
+      tempo:
+        condition: service_started
+
+      redis:
+        condition: service_healthy
+
+      discovery-server:
+        condition: service_started
+
   user-service:
     build:
       context: ./user-service
+
+    ports:
+      - "8082:8082"
 
     environment:
       DB_URL: jdbc:postgresql://user-db:5432/user_db
@@ -234,6 +323,10 @@ services:
 
       MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY: "false"
 
+      EUREKA_DEFAULT_ZONE: http://discovery-server:8761/eureka/
+      EUREKA_INSTANCE_HOSTNAME: user-service
+      EUREKA_INSTANCE_INSTANCE_ID: user-service:8082
+
     depends_on:
       user-db:
         condition: service_healthy
@@ -241,17 +334,23 @@ services:
       keycloak:
         condition: service_started
 
+      discovery-server:
+        condition: service_started
+
   order-service:
     build:
       context: ./order-service
+
+    ports:
+      - "8083:8083"
 
     environment:
       DB_URL: jdbc:postgresql://order-db:5432/order_db
       DB_USERNAME: order_user
       DB_PASSWORD: order_password
 
-      USER_SERVICE_URL: http://user-service:8082
-      PRODUCT_SERVICE_URL: http://product-service:8081
+      USER_SERVICE_URL: http://user-service
+      PRODUCT_SERVICE_URL: http://product-service
 
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
 
@@ -265,11 +364,18 @@ services:
 
       MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY: "false"
 
+      EUREKA_DEFAULT_ZONE: http://discovery-server:8761/eureka/
+      EUREKA_INSTANCE_HOSTNAME: order-service
+      EUREKA_INSTANCE_INSTANCE_ID: order-service:8083
+
     depends_on:
       order-db:
         condition: service_healthy
 
       product-service:
+        condition: service_started
+
+      product-service-2:
         condition: service_started
 
       user-service:
@@ -284,16 +390,19 @@ services:
       tempo:
         condition: service_started
 
+      discovery-server:
+        condition: service_started
+
   api-gateway:
     build:
       context: ./api-gateway
 
     ports:
       - "8085:8085"
+      - "9085:9085"
 
     environment:
       PRODUCT_SERVICE_URL: http://product-service:8081
-
       ORDER_SERVICE_URL: http://order-service:8083
 
       JWT_ISSUER_URI: http://localhost:8080/realms/spring-shop
@@ -303,14 +412,24 @@ services:
 
       MANAGEMENT_OBSERVATIONS_ENABLE_SPRING_SECURITY: "false"
 
+      EUREKA_DEFAULT_ZONE: http://discovery-server:8761/eureka/
+      EUREKA_INSTANCE_HOSTNAME: api-gateway
+      EUREKA_INSTANCE_INSTANCE_ID: api-gateway:8085
+
     depends_on:
       product-service:
+        condition: service_started
+
+      product-service-2:
         condition: service_started
 
       order-service:
         condition: service_started
 
       tempo:
+        condition: service_started
+
+      discovery-server:
         condition: service_started
 
   notification-service:
@@ -340,6 +459,7 @@ services:
 
   prometheus:
     image: prom/prometheus
+
     ports:
       - "9090:9090"
 
@@ -366,6 +486,7 @@ services:
 
   grafana:
     image: grafana/grafana
+
     ports:
       - "3000:3000"
 
@@ -424,6 +545,7 @@ services:
 
   alertmanager:
     image: prom/alertmanager:v0.33.1
+
     ports:
       - "9093:9093"
 

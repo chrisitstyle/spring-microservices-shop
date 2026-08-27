@@ -57,7 +57,7 @@ server:
 
 services:
   user:
-    url: ${USER_SERVICE_URL:http://localhost:8082}
+    url: ${USER_SERVICE_URL:http://user-service}
 
   product:
     url: ${PRODUCT_SERVICE_URL:http://product-service}

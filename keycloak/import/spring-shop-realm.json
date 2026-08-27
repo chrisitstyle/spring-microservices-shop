@@ -461,6 +461,38 @@
       "enabled": true,
       "serviceAccountClientId": "order-service-client",
       "realmRoles": ["INTERNAL_SERVICE"]
+    },
+    {
+      "username": "customer",
+      "enabled": true,
+      "email": "customer@example.com",
+      "emailVerified": true,
+      "firstName": "Customer",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "customer",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["CUSTOMER"]
+    },
+    {
+      "username": "admin-user",
+      "enabled": true,
+      "email": "admin@example.com",
+      "emailVerified": true,
+      "firstName": "Admin",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["ADMIN"]
     }
   ],
   "defaultRole": {
@@ -1679,7 +1711,7 @@
     "referrerPolicy": "no-referrer",
     "xRobotsTag": "none",
     "xFrameOptions": "SAMEORIGIN",
-    "contentSecurityPolicy": "frame-src \u0027self\u0027; frame-ancestors \u0027self\u0027; object-src \u0027none\u0027;",
+    "contentSecurityPolicy": "frame-src 'self'; frame-ancestors 'self'; object-src 'none';",
     "strictTransportSecurity": "max-age=31536000; includeSubDomains"
   },
   "smtpServer": {},

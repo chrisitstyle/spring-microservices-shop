@@ -2,6 +2,7 @@ package pl.chrisitstyle.order;
 
 import io.github.resilience4j.retry.annotation.Retry;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.oauth2.client.web.client.OAuth2ClientHttpRequestInterceptor;
 import org.springframework.stereotype.Component;
@@ -24,7 +25,7 @@ public class UserClient {
     private final RestClient restClient;
 
     public UserClient(
-            RestClient.Builder builder,
+            @LoadBalanced RestClient.Builder builder,
             OAuth2ClientHttpRequestInterceptor oauth2ClientHttpRequestInterceptor,
             @Value("${services.user.url}") String userServiceUrl
     ) {
