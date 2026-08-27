@@ -39,7 +39,7 @@ spring:
                 - Method=DELETE
 
             - id: order-service
-              uri: ${ORDER_SERVICE_URL:http://localhost:8083}
+              uri: lb://order-service
               predicates:
                 - Path=/orders,/orders/**
 

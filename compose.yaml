@@ -402,9 +402,6 @@ services:
       - "9085:9085"
 
     environment:
-      PRODUCT_SERVICE_URL: http://product-service:8081
-      ORDER_SERVICE_URL: http://order-service:8083
-
       JWT_ISSUER_URI: http://localhost:8080/realms/spring-shop
       JWT_JWK_SET_URI: http://keycloak:8080/realms/spring-shop/protocol/openid-connect/certs
 
