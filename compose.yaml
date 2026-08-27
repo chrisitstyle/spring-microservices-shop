@@ -350,7 +350,6 @@ services:
       DB_PASSWORD: order_password
 
       USER_SERVICE_URL: http://user-service
-      PRODUCT_SERVICE_URL: http://product-service
 
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
 

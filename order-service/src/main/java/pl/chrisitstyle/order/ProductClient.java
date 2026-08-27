@@ -1,45 +1,24 @@
 package pl.chrisitstyle.order;
 
+import feign.FeignException;
+import feign.RetryableException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cloud.client.loadbalancer.LoadBalanced;
-import org.springframework.http.HttpStatus;
-import org.springframework.security.oauth2.client.web.client.OAuth2ClientHttpRequestInterceptor;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.ResourceAccessException;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestClientResponseException;
 import pl.chrisitstyle.order.exception.ExternalServiceException;
 import pl.chrisitstyle.order.exception.OrderCreationException;
 
 import java.util.UUID;
 
-import static org.springframework.security.oauth2.client.web.client.RequestAttributeClientRegistrationIdResolver.clientRegistrationId;
-import static org.springframework.security.oauth2.client.web.client.RequestAttributePrincipalResolver.principal;
-
 @Component
 public class ProductClient {
 
-    private static final String CLIENT_REGISTRATION_ID =
-            "order-service-client";
-
-    private static final String PRINCIPAL_NAME =
-            "order-service";
-
-    private final RestClient restClient;
+    private final ProductFeignClient productFeignClient;
 
     public ProductClient(
-            @LoadBalanced RestClient.Builder builder,
-            OAuth2ClientHttpRequestInterceptor oauth2ClientHttpRequestInterceptor,
-            @Value("${services.product.url}")
-            String productServiceUrl
+            ProductFeignClient productFeignClient
     ) {
-        this.restClient = builder
-                .baseUrl(productServiceUrl)
-                .requestInterceptor(oauth2ClientHttpRequestInterceptor)
-                .build();
+        this.productFeignClient = productFeignClient;
     }
 
     @Retry(name = "productService")
@@ -50,33 +29,27 @@ public class ProductClient {
             UUID idempotencyKey
     ) {
         try {
-            return restClient.post()
-                    .uri("/products/{id}/reserve", productId)
-                    .header(
-                            "Idempotency-Key",
-                            idempotencyKey.toString()
-                    )
-                    .attributes(
-                            clientRegistrationId(
-                                    CLIENT_REGISTRATION_ID
-                            )
-                    )
-                    .attributes(
-                            principal(PRINCIPAL_NAME)
-                    )
-                    .body(new StockRequest(quantity))
-                    .retrieve()
-                    .body(ProductReservationResponse.class);
+            return productFeignClient.reserve(
+                    productId,
+                    idempotencyKey.toString(),
+                    new StockRequest(quantity)
+            );
 
-        } catch (RestClientResponseException exception) {
+        } catch (RetryableException exception) {
+            throw new ExternalServiceException(
+                    "Product service unavailable",
+                    exception
+            );
 
-            if (exception.getStatusCode() == HttpStatus.NOT_FOUND) {
+        } catch (FeignException exception) {
+
+            if (exception.status() == 404) {
                 throw new OrderCreationException(
                         "Product " + productId + " not found"
                 );
             }
 
-            if (exception.getStatusCode() == HttpStatus.CONFLICT) {
+            if (exception.status() == 409) {
                 throw new OrderCreationException(
                         "Cannot reserve product " + productId
                 );
@@ -84,19 +57,7 @@ public class ProductClient {
 
             throw new ExternalServiceException(
                     "Product service returned error: "
-                            + exception.getStatusCode(),
-                    exception
-            );
-
-        } catch (ResourceAccessException exception) {
-            throw new ExternalServiceException(
-                    "Product service unavailable",
-                    exception
-            );
-
-        } catch (RestClientException exception) {
-            throw new ExternalServiceException(
-                    "Product service communication failed",
+                            + exception.status(),
                     exception
             );
         }
@@ -109,34 +70,28 @@ public class ProductClient {
             UUID reservationKey
     ) {
         try {
-            restClient.post()
-                    .uri("/products/{id}/release", productId)
-                    .header(
-                            "Idempotency-Key",
-                            reservationKey.toString()
-                    )
-                    .attributes(
-                            clientRegistrationId(
-                                    CLIENT_REGISTRATION_ID
-                            )
-                    )
-                    .attributes(
-                            principal(PRINCIPAL_NAME)
-                    )
-                    .body(new StockRequest(quantity))
-                    .retrieve()
-                    .toBodilessEntity();
+            productFeignClient.release(
+                    productId,
+                    reservationKey.toString(),
+                    new StockRequest(quantity)
+            );
 
-        } catch (RestClientResponseException exception) {
+        } catch (RetryableException exception) {
+            throw new ExternalServiceException(
+                    "Product service unavailable while releasing stock",
+                    exception
+            );
 
-            if (exception.getStatusCode() == HttpStatus.NOT_FOUND) {
+        } catch (FeignException exception) {
+
+            if (exception.status() == 404) {
                 throw new OrderCreationException(
                         "Cannot release stock because product "
                                 + productId + " was not found"
                 );
             }
 
-            if (exception.getStatusCode() == HttpStatus.CONFLICT) {
+            if (exception.status() == 409) {
                 throw new OrderCreationException(
                         "Cannot release stock reservation for product "
                                 + productId
@@ -145,19 +100,7 @@ public class ProductClient {
 
             throw new ExternalServiceException(
                     "Product service returned error while releasing stock: "
-                            + exception.getStatusCode(),
-                    exception
-            );
-
-        } catch (ResourceAccessException exception) {
-            throw new ExternalServiceException(
-                    "Product service unavailable while releasing stock",
-                    exception
-            );
-
-        } catch (RestClientException exception) {
-            throw new ExternalServiceException(
-                    "Product service communication failed while releasing stock",
+                            + exception.status(),
                     exception
             );
         }

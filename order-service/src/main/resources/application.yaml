@@ -2,6 +2,18 @@ spring:
   application:
     name: order-service
 
+  cloud:
+    openfeign:
+      oauth2:
+        enabled: true
+        client-registration-id: order-service-client
+
+      client:
+        config:
+          product-service:
+            connectTimeout: 2000
+            readTimeout: 2000
+
   security:
     oauth2:
       resourceserver:
@@ -58,9 +70,6 @@ server:
 services:
   user:
     url: ${USER_SERVICE_URL:http://user-service}
-
-  product:
-    url: ${PRODUCT_SERVICE_URL:http://product-service}
 
 
 management:

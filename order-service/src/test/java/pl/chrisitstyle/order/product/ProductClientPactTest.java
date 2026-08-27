@@ -9,15 +9,20 @@ import au.com.dius.pact.core.model.PactSpecVersion;
 import au.com.dius.pact.core.model.V4Pact;
 import au.com.dius.pact.core.model.annotations.Pact;
 
+import feign.Feign;
+import feign.jackson.JacksonDecoder;
+import feign.jackson.JacksonEncoder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import org.springframework.cloud.openfeign.support.SpringMvcContract;
 import org.springframework.http.HttpRequest;
 import org.springframework.http.client.ClientHttpRequestExecution;
 import org.springframework.security.oauth2.client.web.client.OAuth2ClientHttpRequestInterceptor;
 import org.springframework.web.client.RestClient;
 
 import pl.chrisitstyle.order.ProductClient;
+import pl.chrisitstyle.order.ProductFeignClient;
 import pl.chrisitstyle.order.ProductReservationResponse;
 import pl.chrisitstyle.order.exception.OrderCreationException;
 
@@ -309,15 +314,20 @@ class ProductClientPactTest {
 
     private ProductClient createProductClient(
             MockServer mockServer
-    ) throws IOException {
+    ) {
 
-        OAuth2ClientHttpRequestInterceptor oauth2Interceptor =
-                createNoOpOAuth2Interceptor();
+        ProductFeignClient productFeignClient =
+                Feign.builder()
+                        .contract(new SpringMvcContract())
+                        .encoder(new JacksonEncoder())
+                        .decoder(new JacksonDecoder())
+                        .target(
+                                ProductFeignClient.class,
+                                mockServer.getUrl()
+                        );
 
         return new ProductClient(
-                RestClient.builder(),
-                oauth2Interceptor,
-                mockServer.getUrl()
+                productFeignClient
         );
     }
 
