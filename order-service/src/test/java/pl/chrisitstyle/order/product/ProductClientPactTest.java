@@ -8,19 +8,12 @@ import au.com.dius.pact.consumer.junit5.PactTestFor;
 import au.com.dius.pact.core.model.PactSpecVersion;
 import au.com.dius.pact.core.model.V4Pact;
 import au.com.dius.pact.core.model.annotations.Pact;
-
 import feign.Feign;
 import feign.jackson.JacksonDecoder;
 import feign.jackson.JacksonEncoder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-
 import org.springframework.cloud.openfeign.support.SpringMvcContract;
-import org.springframework.http.HttpRequest;
-import org.springframework.http.client.ClientHttpRequestExecution;
-import org.springframework.security.oauth2.client.web.client.OAuth2ClientHttpRequestInterceptor;
-import org.springframework.web.client.RestClient;
-
 import pl.chrisitstyle.order.ProductClient;
 import pl.chrisitstyle.order.ProductFeignClient;
 import pl.chrisitstyle.order.ProductReservationResponse;
@@ -30,12 +23,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.*;
 
 @ExtendWith(PactConsumerTestExt.class)
 class ProductClientPactTest {
@@ -329,39 +317,5 @@ class ProductClientPactTest {
         return new ProductClient(
                 productFeignClient
         );
-    }
-
-    private OAuth2ClientHttpRequestInterceptor
-    createNoOpOAuth2Interceptor() throws IOException {
-
-        OAuth2ClientHttpRequestInterceptor interceptor =
-                mock(
-                        OAuth2ClientHttpRequestInterceptor.class
-                );
-
-        when(
-                interceptor.intercept(
-                        any(),
-                        any(),
-                        any()
-                )
-        ).thenAnswer(invocation -> {
-
-            HttpRequest request =
-                    invocation.getArgument(0);
-
-            byte[] body =
-                    invocation.getArgument(1);
-
-            ClientHttpRequestExecution execution =
-                    invocation.getArgument(2);
-
-            return execution.execute(
-                    request,
-                    body
-            );
-        });
-
-        return interceptor;
     }
 }
